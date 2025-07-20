@@ -15,12 +15,12 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Bot, Loader2, User, ArrowRight, Lock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import type { User as UserType, Seat, Assignment, Group } from '@/lib/types';
+import type { User as UserType, Seat, Assignment, Group, ChangeRequest } from '@/lib/types';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { getDocs, collection, query, where } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { idb } from '@/lib/db';
 import { format } from 'date-fns';
+import { useLiveQuery } from 'dexie-react-hooks';
 
 interface SmartScheduleProps {
   onScheduleGenerated: (newAssignments: Record<string, string>) => void;
@@ -37,6 +37,10 @@ export default function SmartSchedule({ onScheduleGenerated, users, seats, assig
   const { toast } = useToast();
   const [lockedSeats, setLockedSeats] = useState<Record<string, string>>({});
 
+  const approvedRequests = useLiveQuery(() => 
+    idb.changeRequests.where('status').equals('approved').toArray(), 
+  []);
+
   const handleLockToggle = (userId: string, currentSeatId: string) => {
     setLockedSeats(prev => {
       const newLocked = { ...prev };
@@ -50,16 +54,13 @@ export default function SmartSchedule({ onScheduleGenerated, users, seats, assig
   };
 
   const handleGenerate = async () => {
-    if (!group) return;
+    if (!group || !approvedRequests) return;
     setIsLoading(true);
     setSuggestion(null);
     try {
       const employeeNames = users.map(u => u.name);
       const seatNames = seats.map(s => s.name);
       
-      const approvedRequestsSnapshot = await getDocs(query(collection(db, "changeRequests"), where("status", "==", "approved"), where("groupId", "==", group.id)));
-      const approvedRequests = approvedRequestsSnapshot.docs.map(doc => doc.data());
-
       const pastOverrideRequests: Record<string, string[]> = {};
       for (const req of approvedRequests) {
            const proposer = users.find(u => u.id === req.proposingUserId);
@@ -119,6 +120,7 @@ export default function SmartSchedule({ onScheduleGenerated, users, seats, assig
   
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const todaysAssignments = assignments.filter(a => a.date === todayStr);
+  const isLocked = group?.isLocked ?? true;
 
   return (
     <>
@@ -130,7 +132,7 @@ export default function SmartSchedule({ onScheduleGenerated, users, seats, assig
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Button className="w-full" onClick={() => setIsOpen(true)} disabled={!group?.isLocked}>
+          <Button className="w-full" onClick={() => setIsOpen(true)} disabled={!isLocked}>
             <Bot className="mr-2 h-4 w-4" />
             Generate Smart Schedule
           </Button>
@@ -173,7 +175,7 @@ export default function SmartSchedule({ onScheduleGenerated, users, seats, assig
           
           {!suggestion && (
              <div className="flex justify-center items-center h-24">
-                <Button onClick={handleGenerate} disabled={isLoading}>
+                <Button onClick={handleGenerate} disabled={isLoading || !approvedRequests}>
                   {isLoading ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />

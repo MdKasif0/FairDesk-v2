@@ -12,28 +12,20 @@ import SmartSchedule from "@/components/dashboard/SmartSchedule";
 import SeatChangeDialog from "@/components/dashboard/SeatChangeDialog";
 import { useToast } from "@/hooks/use-toast";
 import { alertSeatChangeStatus } from "@/ai/flows/alert-seat-change-status";
-import { db } from "@/lib/firebase";
-import {
-  collection,
-  doc,
-  getDocs,
-  writeBatch,
-  query,
-  where,
-  addDoc,
-  updateDoc,
-  getDoc,
-  onSnapshot,
-  setDoc,
-} from "firebase/firestore";
+import { idb } from "@/lib/db";
+import { useLiveQuery } from "dexie-react-hooks";
+import { v4 as uuidv4 } from 'uuid';
 
 const HARDCODED_USERS: User[] = [
   { id: 'user-aariz', name: 'Aariz', avatar: 'https://i.pravatar.cc/150?u=aariz' },
   { id: 'user-nabil', name: 'Nabil', avatar: 'https://i.pravatar.cc/150?u=nabil' },
   { id: 'user-yatharth', name: 'Yatharth', avatar: 'https://i.pravatar.cc/150?u=yatharth' },
 ];
-const HARDCODED_GROUP_ID = 'default-fairdesk-group';
-const HARDCODED_SEATS = ["Desk 1", "Desk 2", "Desk 3"];
+const HARDCODED_SEATS: Pick<Seat, 'name'>[] = [
+    { name: "Desk 1" },
+    { name: "Desk 2" },
+    { name: "Desk 3" },
+];
 
 
 export default function DashboardPage() {
@@ -42,17 +34,19 @@ export default function DashboardPage() {
   const router = useRouter();
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [group, setGroup] = useState<Group | null>(null);
-  const [users, setUsers] = useState<User[]>([]);
-  const [seats, setSeats] = useState<Seat[]>([]);
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [changeRequests, setChangeRequests] = useState<ChangeRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [isSeatChangeDialogOpen, setSeatChangeDialogOpen] = useState(false);
   const [seatChangeDialogData, setSeatChangeDialogData] = useState<{date: Date, assignment: Assignment} | null>(null);
   
   const [isSmartScheduleDialogOpen, setSmartScheduleDialogOpen] = useState(false);
+
+  // Dexie live queries
+  const users = useLiveQuery(() => idb.users.toArray(), []);
+  const seats = useLiveQuery(() => idb.seats.toArray(), []);
+  const assignments = useLiveQuery(() => idb.assignments.toArray(), []);
+  const changeRequests = useLiveQuery(() => idb.changeRequests.where('status').equals('pending').toArray(), []);
+  const group = useLiveQuery(() => idb.groups.toCollection().first(), []);
 
   useEffect(() => {
     const userId = searchParams.get('user');
@@ -67,88 +61,55 @@ export default function DashboardPage() {
   useEffect(() => {
     const initializeData = async () => {
       setLoading(true);
-      const groupDocRef = doc(db, "groups", HARDCODED_GROUP_ID);
-      const groupDocSnap = await getDoc(groupDocRef);
+      const userCount = await idb.users.count();
 
-      if (!groupDocSnap.exists()) {
-        console.log("No existing group found, initializing new data...");
+      if (userCount === 0) {
+        console.log("No existing data found, initializing new data...");
         try {
-          const batch = writeBatch(db);
-          
-          // 1. Create users
-          HARDCODED_USERS.forEach(user => {
-            batch.set(doc(db, "users", user.id), user);
-          });
-          
-          // 2. Create seats
-          const seatIds = HARDCODED_SEATS.map(seatName => {
-              const seatRef = doc(collection(db, "seats"));
-              batch.set(seatRef, {
-                  id: seatRef.id,
-                  name: seatName,
-                  groupId: HARDCODED_GROUP_ID
-              });
-              return seatRef.id;
-          });
+          await idb.transaction('rw', idb.users, idb.seats, idb.groups, idb.assignments, async () => {
+             // 1. Create users
+             await idb.users.bulkAdd(HARDCODED_USERS);
 
-          // 3. Create group
-           const newGroup = {
-                id: HARDCODED_GROUP_ID,
+             // 2. Create seats
+             const seatIds = [];
+             for (const seat of HARDCODED_SEATS) {
+                const id = await idb.seats.add({ ...seat, id: uuidv4(), groupId: 'default-group' });
+                seatIds.push(id);
+             }
+
+             // 3. Create group
+             const newGroup = {
+                id: 'default-group',
                 name: "FairDesk Team",
                 members: HARDCODED_USERS.map(u => u.id),
                 isLocked: true,
-            };
-           batch.set(groupDocRef, newGroup);
-           
-           // 4. Create initial assignment for today
-           let today = startOfToday();
-           if(isWeekend(today)) {
-               today = addDays(today, 1);
-               if(isWeekend(today)) today = addDays(today, 1);
-           }
-           const todayStr = format(today, 'yyyy-MM-dd');
-           HARDCODED_USERS.forEach((user, index) => {
-               const assignmentRef = doc(collection(db, "assignments"));
-               batch.set(assignmentRef, {
-                   id: assignmentRef.id,
-                   date: todayStr,
-                   userId: user.id,
-                   seatId: seatIds[index],
-                   groupId: HARDCODED_GROUP_ID,
-               });
-           });
-           
-          await batch.commit();
+             };
+             await idb.groups.add(newGroup);
+
+             // 4. Create initial assignment for today
+             let today = startOfToday();
+             if(isWeekend(today)) {
+                 today = addDays(today, 1);
+                 if(isWeekend(today)) today = addDays(today, 1);
+             }
+             const todayStr = format(today, 'yyyy-MM-dd');
+
+             const initialAssignments = HARDCODED_USERS.map((user, index) => ({
+                 id: uuidv4(),
+                 date: todayStr,
+                 userId: user.id,
+                 seatId: seatIds[index],
+                 groupId: 'default-group',
+             }));
+             await idb.assignments.bulkAdd(initialAssignments);
+          });
           toast({ title: "Welcome!", description: "Initial data has been set up." });
         } catch (error) {
             console.error("Failed to initialize data:", error);
             toast({ variant: 'destructive', title: 'Initialization Failed', description: 'Could not set up initial user and group data.' });
         }
       }
-
-      // Setup listeners
-      const unsubscribes = [
-        onSnapshot(doc(db, 'groups', HARDCODED_GROUP_ID), (doc) => {
-          if(doc.exists()){
-              setGroup({ ...doc.data(), id: doc.id } as Group);
-          }
-        }),
-        onSnapshot(query(collection(db, 'users'), where('id', 'in', HARDCODED_USERS.map(u => u.id))), (snapshot) => {
-          setUsers(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User)));
-        }),
-        onSnapshot(query(collection(db, 'seats'), where('groupId', '==', HARDCODED_GROUP_ID)), (snapshot) => {
-          setSeats(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Seat)));
-        }),
-        onSnapshot(query(collection(db, 'assignments'), where('groupId', '==', HARDCODED_GROUP_ID)), (snapshot) => {
-          setAssignments(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Assignment)));
-        }),
-        onSnapshot(query(collection(db, 'changeRequests'), where('groupId', '==', HARDCODED_GROUP_ID), where('status', '==', 'pending')), (snapshot) => {
-          setChangeRequests(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as ChangeRequest)));
-        }),
-      ];
-      
       setLoading(false);
-      return () => unsubscribes.forEach(unsub => unsub());
     };
 
     initializeData();
@@ -161,7 +122,7 @@ export default function DashboardPage() {
   };
   
   const handleSeatChangeSubmit = async (requestedSeatId: string) => {
-    if (seatChangeDialogData && currentUser && group) {
+    if (seatChangeDialogData && currentUser && group && assignments) {
        const userToSwapWith = assignments.find(a => a.date === format(seatChangeDialogData.date, "yyyy-MM-dd") && a.seatId === requestedSeatId)?.userId;
 
       if (!userToSwapWith) {
@@ -173,20 +134,21 @@ export default function DashboardPage() {
         return;
       }
       
-      const newRequestData = {
+      const newRequestData: ChangeRequest = {
+        id: uuidv4(),
         date: format(seatChangeDialogData.date, "yyyy-MM-dd"),
         proposingUserId: currentUser.id,
         userToSwapWithId: userToSwapWith,
         originalSeatId: seatChangeDialogData.assignment.seatId,
         requestedSeatId: requestedSeatId,
-        status: "pending" as const,
+        status: "pending",
         approvals: [],
         rejections: [],
         groupId: group.id,
       };
       
       try {
-        await addDoc(collection(db, "changeRequests"), newRequestData);
+        await idb.changeRequests.add(newRequestData);
         toast({
           title: "Request Submitted",
           description: "Your seat change request has been submitted for approval.",
@@ -204,7 +166,7 @@ export default function DashboardPage() {
   };
 
   const handleApproval = async (requestId: string, vote: 'approve' | 'reject') => {
-    if (!currentUser || !changeRequests) return;
+    if (!currentUser || !changeRequests || !assignments) return;
     
     const request = changeRequests.find(r => r.id === requestId);
     if (!request) return;
@@ -221,58 +183,37 @@ export default function DashboardPage() {
     const newApprovals = vote === 'approve' ? [...request.approvals, currentUser.id] : request.approvals;
     const newRejections = vote === 'reject' ? [...request.rejections, currentUser.id] : request.rejections;
     
-    // In a 3-person group, 1 vote is needed (the person not involved).
     const approvalsNeeded = 1;
     const isApproved = newApprovals.length >= approvalsNeeded;
     const isRejected = newRejections.length >= 1;
 
     const newStatus = isApproved ? 'approved' : isRejected ? 'rejected' : 'pending';
 
-    const requestRef = doc(db, "changeRequests", requestId);
-    
     try {
-        const updatePayload: any = {
-            approvals: newApprovals,
-            rejections: newRejections,
-        };
-        
-        if (newStatus !== 'pending') {
-            updatePayload.status = newStatus;
-        }
-        
-        await updateDoc(requestRef, updatePayload);
-        
-        if (newStatus === 'approved') {
-            const batch = writeBatch(db);
-
-            const assignment1Query = query(collection(db, "assignments"), 
-                where("date", "==", request.date), 
-                where("userId", "==", request.proposingUserId),
-                where("groupId", "==", request.groupId)
-            );
-            const assignment2Query = query(collection(db, "assignments"), 
-                where("date", "==", request.date), 
-                where("userId", "==", request.userToSwapWithId),
-                where("groupId", "==", request.groupId)
-            );
-
-            const [assignment1Snap, assignment2Snap] = await Promise.all([
-                getDocs(assignment1Query),
-                getDocs(assignment2Query)
-            ]);
-
-            if (!assignment1Snap.empty && !assignment2Snap.empty) {
-                const assignment1Ref = assignment1Snap.docs[0].ref;
-                const assignment2Ref = assignment2Snap.docs[0].ref;
-
-                batch.update(assignment1Ref, { seatId: request.requestedSeatId });
-                batch.update(assignment2Ref, { seatId: request.originalSeatId });
-
-                await batch.commit();
-            } else {
-                 throw new Error("Could not find assignments to swap.");
+        await idb.transaction('rw', idb.changeRequests, idb.assignments, async () => {
+             const updatePayload: Partial<ChangeRequest> = {
+                approvals: newApprovals,
+                rejections: newRejections,
+            };
+            
+            if (newStatus !== 'pending') {
+                updatePayload.status = newStatus;
             }
-        }
+            
+            await idb.changeRequests.update(requestId, updatePayload);
+            
+            if (newStatus === 'approved') {
+                const assignment1 = assignments.find(a => a.date === request.date && a.userId === request.proposingUserId);
+                const assignment2 = assignments.find(a => a.date === request.date && a.userId === request.userToSwapWithId);
+
+                if (assignment1 && assignment2) {
+                    await idb.assignments.update(assignment1.id, { seatId: request.requestedSeatId });
+                    await idb.assignments.update(assignment2.id, { seatId: request.originalSeatId });
+                } else {
+                     throw new Error("Could not find assignments to swap.");
+                }
+            }
+        });
         
         if (newStatus !== 'pending') {
              const aiAlert = await alertSeatChangeStatus({
@@ -305,7 +246,7 @@ export default function DashboardPage() {
   };
 
   const handleScheduleGenerated = async (newSchedule: Record<string, string>) => {
-    if(!group) return;
+    if(!group || !users || !seats) return;
 
     let nextDay = addDays(new Date(), 1);
     while (isWeekend(nextDay)) {
@@ -314,30 +255,28 @@ export default function DashboardPage() {
     const nextWorkingDay = format(nextDay, 'yyyy-MM-dd');
 
     try {
-      const batch = writeBatch(db);
-      
-      const q = query(collection(db, "assignments"), where("date", "==", nextWorkingDay), where("groupId", "==", group.id));
-      const querySnapshot = await getDocs(q);
-      querySnapshot.forEach((doc) => {
-        batch.delete(doc.ref);
-      });
+       await idb.transaction('rw', idb.assignments, async () => {
+         const existingAssignments = await idb.assignments.where('date').equals(nextWorkingDay).toArray();
+         if(existingAssignments.length > 0) {
+            await idb.assignments.bulkDelete(existingAssignments.map(a => a.id));
+         }
 
-      Object.entries(newSchedule).forEach(([userName, seatName]) => {
-        const user = users.find(u => u.name === userName);
-        const seat = seats.find(s => s.name === seatName);
-        if (!user || !seat) throw new Error(`Invalid user ${userName} or seat ${seatName}`);
-        
-        const newAssignment = {
-          date: nextWorkingDay,
-          userId: user.id,
-          seatId: seat.id,
-          groupId: group.id,
-        };
-        const newDocRef = doc(collection(db, "assignments"));
-        batch.set(newDocRef, newAssignment);
-      });
-
-      await batch.commit();
+         const newAssignments: Assignment[] = [];
+         Object.entries(newSchedule).forEach(([userName, seatName]) => {
+           const user = users.find(u => u.name === userName);
+           const seat = seats.find(s => s.name === seatName);
+           if (!user || !seat) throw new Error(`Invalid user ${userName} or seat ${seatName}`);
+           
+           newAssignments.push({
+             id: uuidv4(),
+             date: nextWorkingDay,
+             userId: user.id,
+             seatId: seat.id,
+             groupId: group.id,
+           });
+         });
+         await idb.assignments.bulkAdd(newAssignments);
+       });
       
       toast({
         title: "Success",
@@ -362,7 +301,9 @@ export default function DashboardPage() {
     }
   }
 
-  if (loading || !currentUser) {
+  const dataIsLoading = !users || !seats || !assignments || !changeRequests || !group;
+
+  if (loading || dataIsLoading || !currentUser) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
         <p>Loading user and data...</p>
