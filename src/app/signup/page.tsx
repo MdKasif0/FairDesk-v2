@@ -15,37 +15,62 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { auth } from "@/lib/firebase";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth, db } from "@/lib/firebase";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { doc, setDoc } from "firebase/firestore";
 import { useToast } from "@/hooks/use-toast";
-import { LogIn } from "lucide-react";
+import { UserPlus } from "lucide-react";
 
-export default function LoginPage() {
+export default function SignupPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
+    if (!name || !email || !password) {
       toast({
         variant: "destructive",
         title: "Missing fields",
-        description: "Please enter both email and password.",
+        description: "Please fill in all fields.",
+      });
+      return;
+    }
+    if (password.length < 6) {
+      toast({
+        variant: "destructive",
+        title: "Weak Password",
+        description: "Password should be at least 6 characters long.",
       });
       return;
     }
 
     setIsLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // Add user to Firestore
+      await setDoc(doc(db, "users", user.uid), {
+        id: user.uid,
+        name: name,
+        email: email,
+        avatar: `https://i.pravatar.cc/150?u=${user.uid}`
+      });
+
+      toast({
+        title: "Account Created",
+        description: "You have been successfully signed up.",
+      });
+
       router.push("/dashboard");
     } catch (error: any) {
       toast({
         variant: "destructive",
-        title: "Login Failed",
+        title: "Sign Up Failed",
         description: error.message,
       });
     } finally {
@@ -57,7 +82,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-sm shadow-2xl">
         <CardHeader className="text-center">
-          <div className="flex items-center justify-center space-x-2 mb-4">
+           <div className="flex items-center justify-center space-x-2 mb-4">
              <svg
                 xmlns="http://www.w3.org/2000/svg"
                 width="24"
@@ -78,11 +103,23 @@ export default function LoginPage() {
             <CardTitle className="text-3xl font-bold text-primary">FairDesk</CardTitle>
           </div>
           <CardDescription>
-            Sign in to access your seat plan.
+            Create an account to get started.
           </CardDescription>
         </CardHeader>
-        <form onSubmit={handleLogin}>
+        <form onSubmit={handleSignup}>
           <CardContent className="space-y-4">
+             <div className="space-y-2">
+              <Label htmlFor="name">Name</Label>
+              <Input
+                id="name"
+                type="text"
+                placeholder="John Doe"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                disabled={isLoading}
+              />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -109,17 +146,17 @@ export default function LoginPage() {
           </CardContent>
           <CardFooter className="flex flex-col gap-4">
             <Button type="submit" disabled={isLoading} className="w-full">
-              {isLoading ? "Signing In..." : (
-                <>
-                  <LogIn className="mr-2 h-4 w-4" />
-                  Sign In
-                </>
+              {isLoading ? "Creating Account..." : (
+                 <>
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Sign Up
+                 </>
               )}
             </Button>
             <p className="text-sm text-center text-muted-foreground">
-              Don&apos;t have an account?{" "}
-              <Link href="/signup" className="underline text-primary">
-                Sign up
+              Already have an account?{" "}
+              <Link href="/login" className="underline text-primary">
+                Sign in
               </Link>
             </p>
           </CardFooter>

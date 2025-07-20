@@ -1,10 +1,10 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { format, addDays } from "date-fns";
 import type { Assignment, ChangeRequest, Seat, User } from "@/lib/types";
-import { users as mockUsers, seats as mockSeats } from "@/lib/mock-data";
 import Header from "@/components/dashboard/Header";
 import CalendarView from "@/components/dashboard/CalendarView";
 import PendingApprovals from "@/components/dashboard/PendingApprovals";
@@ -23,7 +23,7 @@ import {
   where,
   addDoc,
   updateDoc,
-  Timestamp
+  getDoc,
 } from "firebase/firestore";
 import { useLiveQuery } from 'dexie-react-hooks';
 import { idb } from '@/lib/db';
@@ -51,13 +51,18 @@ export default function DashboardPage() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // This is a simplified user mapping. In a real app, you might fetch a full user profile.
-        const matchedUser = mockUsers.find(u => user.email?.startsWith(u.name.toLowerCase().replace(" ", "")));
-        if (matchedUser) {
-            setCurrentUser(matchedUser);
+        const userDocRef = doc(db, "users", user.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        if (userDocSnap.exists()) {
+          setCurrentUser(userDocSnap.data() as User);
         } else {
-             // Fallback if email doesn't match
-            setCurrentUser({ id: user.uid, name: user.email || "User", avatar: "" });
+          // This case might happen if the user doc creation failed
+          // or if they exist in auth but not firestore.
+          // For now, we'll log them out.
+          console.error("No user document found for authenticated user.");
+          auth.signOut();
+          router.push("/login");
+          return;
         }
         
         // Sync Firestore data to IndexedDB
