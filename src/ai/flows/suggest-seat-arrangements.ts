@@ -54,6 +54,7 @@ export async function suggestSeatArrangements(
 
 const prompt = ai.definePrompt({
   name: 'suggestSeatArrangementsPrompt',
+  model: 'googleai/gemini-1.5-flash-latest',
   input: {schema: SuggestSeatArrangementsInputSchema},
   output: {schema: SuggestSeatArrangementsOutputSchema},
   prompt: `You are an AI assistant that suggests seat arrangements for employees, taking into account fairness, locked seats, and past seat override requests.
