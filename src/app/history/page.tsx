@@ -11,6 +11,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useLiveQuery } from "dexie-react-hooks";
 import { format, parseISO } from "date-fns";
 
+export const dynamic = 'force-dynamic';
+
 export default function HistoryPage() {
     const searchParams = useSearchParams();
     const router = useRouter();
@@ -84,6 +86,7 @@ export default function HistoryPage() {
                             <Card key={date}>
                                 <CardHeader>
                                     <CardTitle className="text-lg">{formattedDate}</CardTitle>
+
                                 </CardHeader>
                                 <CardContent>
                                     <ul className="space-y-2">
