@@ -4,5 +4,5 @@ import {googleAI} from '@genkit-ai/googleai';
 export const ai = genkit({
   plugins: [googleAI()],
   logLevel: 'debug',
-  enableTracingAndMetrics: true,
+  enableTracingAndMetrics: process.env.NODE_ENV === 'development',
 });
