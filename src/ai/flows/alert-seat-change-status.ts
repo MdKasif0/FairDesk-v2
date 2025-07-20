@@ -38,7 +38,7 @@ The user has requested to change from seat {{{currentSeat}}} to seat {{{proposed
 
 The seat change request requires {{{approvalsNeeded}}} approvals and has received {{{approvalsReceived}}} approvals.
 
-Based on this information, determine if the seat change request has been approved or not.  The isApproved parameter is {{{isApproved}}}.
+Based on this information, determine if the seat change request has been approved or not. The isApproved parameter is {{{isApproved}}}.
 
 Generate a message to display to the user about the status of their seat change request. The message should clearly state whether or not the request was approved.
 `,
