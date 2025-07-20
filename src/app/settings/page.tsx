@@ -102,10 +102,10 @@ export default function SettingsPage() {
                         <CardDescription>Customize the look and feel of the app.</CardDescription>
                     </CardHeader>
                     <CardContent className="flex items-center space-x-4">
-                        <Button variant={theme === 'light' ? 'default' : 'outline'} onClick={() => handleThemeChange('light')} className="w-full">
+                        <Button variant={theme === 'light' ? 'secondary' : 'outline'} onClick={() => handleThemeChange('light')} className="w-full">
                             <Sun className="mr-2 h-4 w-4" /> Light
                         </Button>
-                        <Button variant={theme === 'dark' ? 'default' : 'outline'} onClick={() => handleThemeChange('dark')} className="w-full">
+                        <Button variant={theme === 'dark' ? 'secondary' : 'outline'} onClick={() => handleThemeChange('dark')} className="w-full">
                            <Moon className="mr-2 h-4 w-4" /> Dark
                         </Button>
                     </CardContent>
