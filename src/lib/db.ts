@@ -9,8 +9,8 @@ export class FairDeskDB extends Dexie {
   groups!: Table<Group, string>;
 
   constructor() {
-    super('fairdeskAppDB'); 
-    this.version(2).stores({
+    super('fairdeskV3DB'); 
+    this.version(1).stores({
       users: 'id',
       seats: 'id',
       assignments: 'id, date, groupId', // Added indexes for querying
