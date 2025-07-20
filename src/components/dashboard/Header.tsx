@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { LogOut, Bot } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { auth } from "@/lib/firebase";
+import { signOut } from "firebase/auth";
 
 interface HeaderProps {
   user: User | null;
@@ -26,9 +28,13 @@ interface HeaderProps {
 export default function Header({ user, onSmartScheduleClick }: HeaderProps) {
   const router = useRouter();
 
-  const handleLogout = () => {
-    localStorage.removeItem("fairdesk_user");
-    router.push("/login");
+  const handleLogout = async () => {
+    try {
+        await signOut(auth);
+        router.push("/login");
+    } catch (error) {
+        console.error("Logout failed", error);
+    }
   };
 
   const getInitials = (name: string) => {

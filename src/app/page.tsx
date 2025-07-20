@@ -1,20 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Skeleton } from "@/components/ui/skeleton";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 
 export default function Home() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const user = localStorage.getItem("fairdesk_user");
-    if (user) {
-      router.replace("/dashboard");
-    } else {
-      router.replace("/login");
-    }
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        router.replace("/dashboard");
+      } else {
+        router.replace("/login");
+      }
+    });
+
+    return () => unsubscribe();
   }, [router]);
 
   // The redirect is fast, but we can show a loader just in case.
@@ -41,6 +45,7 @@ export default function Home() {
         <h1 className="text-3xl font-bold text-primary">FairDesk</h1>
       </div>
       <div className="space-y-2 w-64">
+        <p>Loading...</p>
         <Skeleton className="h-4 w-full" />
         <Skeleton className="h-4 w-3/4" />
       </div>

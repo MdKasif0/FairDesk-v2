@@ -19,7 +19,8 @@ export const seats: Seat[] = [
   { id: 'seat-c2', name: 'C2' },
 ];
 
-export const initialAssignments: Assignment[] = [
+// These are now just for initial seeding, not direct use in the app
+export const initialAssignments: Omit<Assignment, 'id'>[] = [
   { date: format(new Date(), 'yyyy-MM-dd'), userId: 'user-1', seatId: 'seat-a1' },
   { date: format(new Date(), 'yyyy-MM-dd'), userId: 'user-2', seatId: 'seat-a2' },
   { date: format(new Date(), 'yyyy-MM-dd'), userId: 'user-3', seatId: 'seat-b1' },
@@ -33,9 +34,8 @@ export const initialAssignments: Assignment[] = [
 ];
 
 
-export const initialChangeRequests: ChangeRequest[] = [
+export const initialChangeRequests: Omit<ChangeRequest, 'id'>[] = [
   {
-    id: 'req-1',
     date: format(new Date(), 'yyyy-MM-dd'),
     proposingUserId: 'user-1',
     currentAssignment: { userId: 'user-1', seatId: 'seat-a1' },

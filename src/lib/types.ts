@@ -6,10 +6,11 @@ export interface User {
 
 export interface Seat {
   id: string;
-  name: string;
+  name:string;
 }
 
 export interface Assignment {
+  id: string;
   date: string; // YYYY-MM-DD
   userId: string;
   seatId: string;
