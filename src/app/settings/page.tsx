@@ -13,6 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Palette, Users, LogOut, Moon, Sun } from "lucide-react";
 import { useLiveQuery } from "dexie-react-hooks";
 
+export const dynamic = "force-dynamic";
+
 export default function SettingsPage() {
     const searchParams = useSearchParams();
     const router = useRouter();
