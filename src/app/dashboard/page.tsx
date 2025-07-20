@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { format, startOfToday } from "date-fns";
+import { format } from "date-fns";
 import type { User, Seat } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,9 +13,9 @@ import { Menu, User as UserIcon, Bell, Shuffle, Upload, MessageSquare, BarChart,
 
 // Hardcoded data as per previous implementation
 const HARDCODED_USERS: User[] = [
-  { id: 'user-aariz', name: 'Aariz', avatar: 'https://i.pravatar.cc/150?u=aariz' },
-  { id: 'user-nabil', name: 'Nabil', avatar: 'https://i.pravatar.cc/150?u=nabil' },
-  { id: 'user-yatharth', name: 'Yatharth', avatar: 'https://i.pravatar.cc/150?u=yatharth' },
+  { id: 'user-aariz', name: 'Aariz', avatar: '/aariz.png' },
+  { id: 'user-nabil', name: 'Nabil', avatar: '/nabil.png' },
+  { id: 'user-yatharth', name: 'Yatharth', avatar: '/yatharth.png' },
 ];
 
 const HARDCODED_SEATS: Seat[] = [

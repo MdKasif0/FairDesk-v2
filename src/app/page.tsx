@@ -10,9 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 const HARDCODED_USERS: User[] = [
-  { id: 'user-aariz', name: 'Aariz', avatar: 'https://i.pravatar.cc/150?u=aariz' },
-  { id: 'user-nabil', name: 'Nabil', avatar: 'https://i.pravatar.cc/150?u=nabil' },
-  { id: 'user-yatharth', name: 'Yatharth', avatar: 'https://i.pravatar.cc/150?u=yatharth' },
+  { id: 'user-aariz', name: 'Aariz', avatar: '/aariz.png' },
+  { id: 'user-nabil', name: 'Nabil', avatar: '/nabil.png' },
+  { id: 'user-yatharth', name: 'Yatharth', avatar: '/yatharth.png' },
 ];
 
 export default function Home() {
