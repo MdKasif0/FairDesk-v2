@@ -9,12 +9,12 @@ export class FairDeskDB extends Dexie {
   groups!: Table<Group, string>;
 
   constructor() {
-    super('fairdeskDB');
+    super('fairdeskAppDB'); // Renamed the database to force a fresh start
     this.version(1).stores({
       users: 'id',
       seats: 'id',
-      assignments: 'id',
-      changeRequests: 'id',
+      assignments: 'id, date, groupId', // Added indexes back for querying
+      changeRequests: 'id, date, groupId',
       groups: 'id',
     });
   }
