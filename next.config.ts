@@ -13,6 +13,7 @@ const withPWA = require('@ducanh2912/next-pwa').default({
   swcMinify: true,
   workboxOptions: {
     disableDevLogs: true,
+    skipWaiting: false, // This is important to allow the user to manually update
   },
   fallbacks: {
     document: '/offline',

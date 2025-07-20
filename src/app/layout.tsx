@@ -2,6 +2,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
+import ClientLayout from '@/components/shared/ClientLayout';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://fairdesk.example.com'),
@@ -70,7 +71,7 @@ export default function RootLayout({
         />
       </head>
       <body className="font-sans antialiased h-full bg-background">
-        {children}
+        <ClientLayout>{children}</ClientLayout>
         <Toaster />
       </body>
     </html>
