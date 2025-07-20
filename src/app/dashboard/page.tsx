@@ -2,6 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { format, addDays, isWeekend, startOfToday, isBefore } from "date-fns";
 import type { Assignment, ChangeRequest, Seat, User, Group } from "@/lib/types";
 import Header from "@/components/dashboard/Header";
@@ -37,8 +38,10 @@ const HARDCODED_SEATS = ["Desk 1", "Desk 2", "Desk 3"];
 
 export default function DashboardPage() {
   const { toast } = useToast();
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
-  const [currentUser, setCurrentUser] = useState<User | null>(HARDCODED_USERS[0]);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [group, setGroup] = useState<Group | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [seats, setSeats] = useState<Seat[]>([]);
@@ -50,6 +53,16 @@ export default function DashboardPage() {
   const [seatChangeDialogData, setSeatChangeDialogData] = useState<{date: Date, assignment: Assignment} | null>(null);
   
   const [isSmartScheduleDialogOpen, setSmartScheduleDialogOpen] = useState(false);
+
+  useEffect(() => {
+    const userId = searchParams.get('user');
+    if (!userId || !HARDCODED_USERS.some(u => u.id === userId)) {
+        router.replace('/');
+        return;
+    }
+    const user = HARDCODED_USERS.find(u => u.id === userId);
+    if(user) setCurrentUser(user);
+  }, [searchParams, router]);
 
   useEffect(() => {
     const initializeData = async () => {
@@ -343,7 +356,10 @@ export default function DashboardPage() {
 
   const handleUserSwitch = (userId: string) => {
     const user = HARDCODED_USERS.find(u => u.id === userId);
-    if(user) setCurrentUser(user);
+    if(user) {
+      setCurrentUser(user);
+      router.push(`/dashboard?user=${userId}`);
+    }
   }
 
   if (loading || !currentUser) {
