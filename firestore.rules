@@ -18,9 +18,12 @@ service cloud.firestore {
         return getUserDoc(request.auth.uid);
     }
     
-    // Helper function to check if the requesting user is a member of a specific group
+    // A user is a member of a group if their user document says so, OR if the group's member list includes them.
+    // This provides flexibility for different types of checks.
     function isMemberOfGroup(groupId) {
-      return isSignedIn() && getRequestingUserDoc().data.groupId == groupId;
+      let userHasGroupId = isSignedIn() && getRequestingUserDoc().data.groupId == groupId;
+      let groupHasUser = isSignedIn() && get(/databases/$(database)/documents/groups/$(groupId)).data.members.hasAny([request.auth.uid]);
+      return userHasGroupId || groupHasUser;
     }
     
     // Helper function to check if a user can join a group
