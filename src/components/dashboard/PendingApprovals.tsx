@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { ChangeRequest, Seat, User as UserType, Group } from "@/lib/types";
-import { ThumbsDown, ThumbsUp, ArrowRight, HelpCircle } from "lucide-react";
+import { ThumbsDown, ThumbsUp, ArrowRight, HelpCircle, Inbox } from "lucide-react";
 import { format } from 'date-fns';
 
 interface PendingApprovalsProps {
@@ -58,9 +58,10 @@ export default function PendingApprovals({
       </CardHeader>
       <CardContent className="space-y-4">
         {pendingRequests.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-4">
-            No pending requests.
-          </p>
+           <div className="flex flex-col items-center justify-center min-h-[150px] text-muted-foreground space-y-2">
+             <Inbox className="h-10 w-10" />
+             <p className="text-sm">No pending requests.</p>
+           </div>
         ) : (
           <TooltipProvider>
             {pendingRequests.map((req) => {
