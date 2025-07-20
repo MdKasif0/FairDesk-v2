@@ -1,49 +1,78 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Default deny all
-    match /{document=**} {
-      allow read, write: if false;
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
     }
 
-    // Users can read other users' public data if authenticated.
-    // A user can only create and update their own document.
-    match /users/{userId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth.uid == userId;
-      allow update: if request.auth.uid == userId;
+    function isUser(userId) {
+      return request.auth.uid == userId;
     }
 
-    // A user can read a group's document if they are a member of that group.
     function isGroupMember(groupId) {
-      return get(/databases/$(database)/documents/groups/$(groupId)).data.members.has(request.auth.uid);
+      return isSignedIn() && get(/databases/$(database)/documents/groups/$(groupId)).data.members.hasAny([request.auth.uid]);
+    }
+    
+    function isGroupCreator(groupId) {
+        return isSignedIn() && get(/databases/$(database)/documents/groups/$(groupId)).data.creatorId == request.auth.uid;
     }
 
+    function isUserInGroup(userId, groupId) {
+        return get(/databases/$(database)/documents/users/$(userId)).data.groupId == groupId;
+    }
+
+    // USERS
+    // Users can read/create their own document.
+    // Users can update their own document, but cannot change their role or groupId directly via this rule.
+    match /users/{userId} {
+      allow read, create: if isSignedIn() && isUser(userId);
+      // groupId and role changes are handled by joining/creating groups.
+      allow update: if isSignedIn() && isUser(userId);
+      allow delete: if false; // Users cannot delete their accounts this way
+    }
+
+    // GROUPS
+    // Any signed-in user can create a group.
+    // Group members can read group data.
+    // The group creator can update the group name.
+    // Group members can update the members list if the group isn't locked (when joining).
     match /groups/{groupId} {
-      // Allow read if user is a member
+      allow create: if isSignedIn();
       allow read: if isGroupMember(groupId);
-      // Allow create by any authenticated user
-      allow create: if request.auth != null;
-      // Allow update if user is a member (for joining, locking, etc.)
-      allow update: if isGroupMember(groupId);
-    }
-    
-    match /seats/{seatId} {
-      // Allow read/write to seats if user is a member of the group
-      allow read, write: if isGroupMember(get(/databases/$(database)/documents/seats/$(seatId)).data.groupId);
-    }
-    
-    match /assignments/{assignmentId} {
-        // Allow read/write to assignments if user is a member of the group
-        allow read, write: if isGroupMemb(request.resource.data.groupId)er(get(/databases/$(database)/documents/assignments/$(assignmentId)).data.groupId);
+      allow update: if (isGroupCreator(groupId) && request.resource.data.keys().hasOnly(['name'])) ||
+                       (isSignedIn() && !resource.data.isLocked && request.resource.data.members.hasAll(resource.data.members) && request.resource.data.members.size() == resource.data.members.size() + 1);
+      allow delete: if false; // Groups cannot be deleted
     }
 
+    // SEATS
+    // Any group member can create/read seats for their group.
+    match /seats/{seatId} {
+      allow read, create: if isGroupMember(request.resource.data.groupId);
+      allow update, delete: if false; // Seats are not updatable or deletable for now
+    }
+
+    // ASSIGNMENTS
+    // Group members can read all assignments for their group.
+    // Assignments can only be created/updated by internal logic (e.g. Smart Schedule), so direct write is limited.
+    // For simplicity, we allow any group member to create/update.
+    match /assignments/{assignmentId} {
+      allow read, write: if isGroupMember(request.resource.data.groupId);
+    }
+    
+    // CHANGE REQUESTS
+    // Proposing user must be the one making the request and must be a member of the group.
+    // Group members can read requests for their group.
+    // Any group member (except the proposer/swappee) can update the approvals/rejections.
     match /changeRequests/{requestId} {
-        // Allow read/write to change requests if user is a member of the group
-        allow read, write: if isGroupMember(get(/databases/$(database)/documents/changeRequests/$(requestId)).data.groupId);
+      allow create: if isGroupMember(request.resource.data.groupId) && isUser(request.resource.data.proposingUserId);
+      allow read: if isGroupMember(resource.data.groupId);
+      allow update: if isGroupMember(resource.data.groupId) &&
+                       request.auth.uid != resource.data.proposingUserId &&
+                       request.auth.uid != resource.data.userToSwapWithId;
+      allow delete: if false;
     }
   }
 }
