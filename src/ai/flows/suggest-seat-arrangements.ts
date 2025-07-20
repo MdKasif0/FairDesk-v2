@@ -28,6 +28,12 @@ const SuggestSeatArrangementsInputSchema = z.object({
     .describe(
       'The metric to use for fairness, e.g., equal time in preferred seats.'
     ),
+  lockedSeats: z
+    .record(z.string())
+    .optional()
+    .describe(
+      'A record of users whose seats are locked for the day, where keys are employee names and values are their locked seat names. These users should not be moved.'
+    ),
 });
 export type SuggestSeatArrangementsInput = z.infer<
   typeof SuggestSeatArrangementsInputSchema
@@ -50,18 +56,19 @@ const prompt = ai.definePrompt({
   name: 'suggestSeatArrangementsPrompt',
   input: {schema: SuggestSeatArrangementsInputSchema},
   output: {schema: SuggestSeatArrangementsOutputSchema},
-  prompt: `You are an AI assistant that suggests seat arrangements for employees, taking into account fairness and past seat override requests.
+  prompt: `You are an AI assistant that suggests seat arrangements for employees, taking into account fairness, locked seats, and past seat override requests.
 
 Given the following information, create a seat arrangement that is as fair as possible, considering the past override requests of each employee as a strong indicator of their preferences.
 
 Employees: {{employees}}
 Seats: {{seats}}
 Past Approved Override Requests (as preferences): {{json pastOverrideRequests}}
+Locked Seats (these assignments MUST NOT change): {{json lockedSeats}}
 Fairness Metric: "{{fairnessMetric}}"
 
 Output a JSON object where the keys are employee names and the values are the assigned seat names.
 
-Ensure every employee has an assigned seat and every seat has one employee assigned to it.
+Ensure every employee has an assigned seat and every seat has one employee assigned to it. The users with locked seats must remain in their specified seats. The remaining users should be assigned to the remaining available seats based on the fairness metric and their preferences.
 `,
 });
 
@@ -76,5 +83,3 @@ const suggestSeatArrangementsFlow = ai.defineFlow(
     return output!;
   }
 );
-
-    

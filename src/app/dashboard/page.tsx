@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { format, addDays } from "date-fns";
+import { format, addDays, isWeekend } from "date-fns";
 import type { Assignment, ChangeRequest, Seat, User } from "@/lib/types";
 import Header from "@/components/dashboard/Header";
 import CalendarView from "@/components/dashboard/CalendarView";
@@ -80,7 +80,7 @@ export default function DashboardPage() {
       onSnapshot(collection(db, 'assignments'), (snapshot) => {
         setAssignments(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Assignment)));
       }),
-      onSnapshot(collection(db, 'changeRequests'), (snapshot) => {
+      onSnapshot(query(collection(db, 'changeRequests'), where('status', '==', 'pending')), (snapshot) => {
         setChangeRequests(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as ChangeRequest)));
       }),
     ];
@@ -243,11 +243,16 @@ export default function DashboardPage() {
   };
 
   const handleScheduleGenerated = async (newSchedule: Record<string, string>) => {
-    const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd');
+    // Find next working day
+    let nextDay = addDays(new Date(), 1);
+    while (isWeekend(nextDay)) {
+        nextDay = addDays(nextDay, 1);
+    }
+    const nextWorkingDay = format(nextDay, 'yyyy-MM-dd');
 
     try {
       const batch = writeBatch(db);
-      const newAssignmentsForTomorrow: Omit<Assignment, 'id'>[] = [];
+      const newAssignmentsForNextDay: Omit<Assignment, 'id'>[] = [];
       const userList = users || [];
       const seatList = seats || [];
 
@@ -258,22 +263,22 @@ export default function DashboardPage() {
         if (!user || !seat) throw new Error(`Invalid user ${userName} or seat ${seatName}`);
         
         const newAssignment = {
-          date: tomorrow,
+          date: nextWorkingDay,
           userId: user.id,
           seatId: seat.id,
         };
-        newAssignmentsForTomorrow.push(newAssignment);
+        newAssignmentsForNextDay.push(newAssignment);
       });
       
-      // Delete existing assignments for tomorrow before adding new ones
-      const q = query(collection(db, "assignments"), where("date", "==", tomorrow));
+      // Delete existing assignments for the next working day before adding new ones
+      const q = query(collection(db, "assignments"), where("date", "==", nextWorkingDay));
       const querySnapshot = await getDocs(q);
       querySnapshot.forEach((doc) => {
         batch.delete(doc.ref);
       });
 
       // Add new assignments to the batch
-      newAssignmentsForTomorrow.forEach(assignment => {
+      newAssignmentsForNextDay.forEach(assignment => {
         const newDocRef = doc(collection(db, "assignments"));
         batch.set(newDocRef, assignment);
       });
@@ -282,7 +287,7 @@ export default function DashboardPage() {
       
       toast({
         title: "Success",
-        description: "New smart schedule has been applied for tomorrow.",
+        description: `New smart schedule has been applied for ${nextWorkingDay}.`,
       });
 
     } catch (error) {
@@ -333,6 +338,7 @@ export default function DashboardPage() {
             users={users}
             seats={seats}
             onScheduleGenerated={handleScheduleGenerated} 
+            assignments={assignments} // Pass current assignments
           />
         </div>
       </main>
@@ -353,5 +359,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    

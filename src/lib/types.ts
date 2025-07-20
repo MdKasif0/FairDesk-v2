@@ -16,6 +16,7 @@ export interface Assignment {
   date: string; // YYYY-MM-DD
   userId: string;
   seatId: string;
+  isLocked?: boolean;
 }
 
 export interface ChangeRequest {
@@ -29,5 +30,3 @@ export interface ChangeRequest {
   approvals: string[]; // list of user IDs who approved
   rejections: string[]; // list of user IDs who rejected
 }
-
-    
