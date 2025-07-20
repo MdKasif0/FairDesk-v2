@@ -1,7 +1,7 @@
 
 import { idb } from './db';
 import type { User, Seat, Assignment, Group } from './types';
-import { format, addDays, isSaturday, isSunday, differenceInDays, parseISO } from 'date-fns';
+import { format, addDays, isSaturday, isSunday, differenceInDays, parseISO, startOfDay, eachDayOfInterval, endOfMonth, startOfMonth } from 'date-fns';
 
 const HARDCODED_USERS: Omit<User, 'id'>[] = [
   { name: 'Aariz', avatar: 'https://placehold.co/200x200.png', "data-ai-hint": "man smiling" },
@@ -77,6 +77,7 @@ export async function getTodaysAssignments(): Promise<Assignment[]> {
     
     return createNextAssignments(lastAssignment.date, todayStr);
 }
+
 
 // Creates the very first set of assignments.
 async function createInitialAssignments(dateStr: string): Promise<Assignment[]> {
@@ -155,4 +156,55 @@ function countWorkingDays(startDate: Date, endDate: Date): number {
         currentDate = addDays(currentDate, 1);
     }
     return count;
+}
+
+
+// Gets all assignments for a given month, generating them if they don't exist.
+export async function getAssignmentsForMonth(monthDate: Date): Promise<Assignment[]> {
+    const monthStart = startOfMonth(monthDate);
+    const monthEnd = endOfMonth(monthDate);
+
+    const dateRange = eachDayOfInterval({ start: monthStart, end: monthEnd });
+    const dateStrings = dateRange.map(d => format(d, 'yyyy-MM-dd'));
+
+    let assignments = await idb.assignments.where('date').inAnyOf(dateStrings).toArray();
+    const existingDates = new Set(assignments.map(a => a.date));
+
+    const missingDates = dateStrings.filter(d => !existingDates.has(d));
+
+    if (missingDates.length > 0) {
+        // Find the last known assignment before the start of the month to use as a base
+        const lastAssignmentBeforeMonth = await idb.assignments
+            .where('date').below(format(monthStart, 'yyyy-MM-dd'))
+            .last();
+        
+        let lastKnownDateStr = lastAssignmentBeforeMonth?.date;
+        
+        if (!lastKnownDateStr) {
+            // No assignments exist at all, create the first one.
+            const firstDate = missingDates[0];
+            const initialAssignments = await createInitialAssignments(firstDate);
+            assignments.push(...initialAssignments);
+            existingDates.add(firstDate);
+            lastKnownDateStr = firstDate;
+        }
+
+        // Generate assignments for all missing dates
+        for (const dateStr of missingDates) {
+            if (existingDates.has(dateStr)) continue;
+
+            const dayOfWeek = parseISO(dateStr).getDay();
+            if (dayOfWeek === 0 || dayOfWeek === 6) { // Skip weekends
+                continue;
+            }
+
+            const newAssignments = await createNextAssignments(lastKnownDateStr, dateStr);
+            assignments.push(...newAssignments);
+            existingDates.add(dateStr);
+            lastKnownDateStr = dateStr;
+        }
+    }
+    
+    // Sort to be safe, though Dexie usually returns them in order.
+    return assignments.sort((a, b) => a.date.localeCompare(b.date));
 }

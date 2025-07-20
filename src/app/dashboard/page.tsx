@@ -13,6 +13,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Calendar } from "@/components/ui/calendar";
 import { Menu, User as UserIcon, Bell, Shuffle, Upload, MessageSquare, BarChart, Settings, Home, Calendar as CalendarIcon, History, MoveRight } from "lucide-react";
 import { idb } from "@/lib/db";
+import BottomNav from "@/components/shared/BottomNav";
 
 // Colors for user cards
 const userCardColors = [
@@ -149,30 +150,7 @@ export default function DashboardPage() {
         </div>
       </main>
 
-      <footer className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-[0_-1px_4px_rgba(0,0,0,0.05)]">
-        <div className="flex justify-around items-center h-16">
-            <Button variant="ghost" className="flex flex-col h-full text-primary">
-                <Home />
-                <span className="text-xs">Home</span>
-            </Button>
-            <Button variant="ghost" className="flex flex-col h-full text-gray-500">
-                <CalendarIcon />
-                <span className="text-xs">Calendar</span>
-            </Button>
-            <Button variant="ghost" className="flex flex-col h-full text-gray-500">
-                <History />
-                <span className="text-xs">History</span>
-            </Button>
-            <Button variant="ghost" className="flex flex-col h-full text-gray-500">
-                <BarChart />
-                <span className="text-xs">Stats</span>
-            </Button>
-            <Button variant="ghost" className="flex flex-col h-full text-gray-500">
-                <Settings />
-                <span className="text-xs">Settings</span>
-            </Button>
-        </div>
-      </footer>
+      <BottomNav current="home" userId={currentUser.id} />
     </div>
   );
 }
