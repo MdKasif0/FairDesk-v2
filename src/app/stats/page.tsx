@@ -8,6 +8,8 @@ import type { User } from "@/lib/types";
 import BottomNav from "@/components/shared/BottomNav";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
+export const dynamic = 'force-dynamic';
+
 export default function StatsPage() {
     const searchParams = useSearchParams();
     const router = useRouter();
