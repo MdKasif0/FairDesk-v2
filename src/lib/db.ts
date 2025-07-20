@@ -10,7 +10,7 @@ export class FairDeskDB extends Dexie {
 
   constructor() {
     super('fairdeskDB');
-    this.version(1).stores({
+    this.version(2).stores({
       users: 'id, name',
       seats: 'id, name, groupId',
       assignments: 'id, date, userId, seatId, groupId',
