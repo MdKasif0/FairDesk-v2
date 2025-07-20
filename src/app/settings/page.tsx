@@ -20,8 +20,16 @@ export default function SettingsPage() {
     const router = useRouter();
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [theme, setTheme] = useState('light');
+    const [isMounted, setIsMounted] = useState(false);
 
     const allUsers = useLiveQuery(() => idb.users.toArray(), []);
+    
+    useEffect(() => {
+        setIsMounted(true);
+        const storedTheme = localStorage.getItem('theme') || 'light';
+        setTheme(storedTheme);
+        document.documentElement.classList.toggle('dark', storedTheme === 'dark');
+    }, []);
 
     useEffect(() => {
         const userId = searchParams.get('user');
@@ -36,11 +44,6 @@ export default function SettingsPage() {
                 router.replace('/');
             }
         });
-        
-        const storedTheme = localStorage.getItem('theme') || 'light';
-        setTheme(storedTheme);
-        document.documentElement.classList.toggle('dark', storedTheme === 'dark');
-
     }, [searchParams, router]);
 
     const handleThemeChange = (newTheme: 'light' | 'dark') => {
@@ -61,7 +64,7 @@ export default function SettingsPage() {
 
     const getInitials = (name: string) => name.split(" ").map((n) => n[0]).join("");
 
-    if (!currentUser || !allUsers) {
+    if (!isMounted || !currentUser || !allUsers) {
         return (
             <div className="flex h-screen w-full items-center justify-center bg-gray-50 dark:bg-gray-900">
                 <p>Loading...</p>
