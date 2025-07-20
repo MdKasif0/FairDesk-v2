@@ -31,6 +31,7 @@ export async function alertSeatChangeStatus(input: AlertSeatChangeStatusInput): 
 
 const prompt = ai.definePrompt({
   name: 'alertSeatChangeStatusPrompt',
+  model: 'googleai/gemini-pro',
   input: {schema: AlertSeatChangeStatusInputSchema},
   output: {schema: AlertSeatChangeStatusOutputSchema},
   prompt: `You are an AI assistant that alerts the user on the status of their seat change request.
