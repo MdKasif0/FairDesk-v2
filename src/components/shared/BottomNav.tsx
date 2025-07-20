@@ -3,16 +3,15 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Home, Calendar as CalendarIcon, History, BarChart, Settings } from "lucide-react";
+import { Home, History, BarChart, Settings } from "lucide-react";
 
 interface BottomNavProps {
-    current: 'home' | 'calendar' | 'history' | 'stats' | 'settings';
+    current: 'home' | 'history' | 'stats' | 'settings';
     userId: string;
 }
 
 const navItems = [
     { id: 'home', icon: Home, label: 'Home', href: '/dashboard' },
-    { id: 'calendar', icon: CalendarIcon, label: 'Calendar', href: '/calendar' },
     { id: 'history', icon: History, label: 'History', href: '/history' },
     { id: 'stats', icon: BarChart, label: 'Stats', href: '/stats' },
     { id: 'settings', icon: Settings, label: 'Settings', href: '/settings' },
