@@ -1,3 +1,4 @@
+
 // src/ai/flows/suggest-seat-arrangements.ts
 'use server';
 
@@ -20,7 +21,7 @@ const SuggestSeatArrangementsInputSchema = z.object({
   pastOverrideRequests: z
     .record(z.array(z.string()))
     .describe(
-      'A record of past seat override requests, where keys are employee names and values are lists of requested seats.'
+      'A record of past approved seat override requests, where keys are employee names and values are lists of requested seats. This can be used as a signal for user preference.'
     ),
   fairnessMetric: z
     .string()
@@ -51,12 +52,12 @@ const prompt = ai.definePrompt({
   output: {schema: SuggestSeatArrangementsOutputSchema},
   prompt: `You are an AI assistant that suggests seat arrangements for employees, taking into account fairness and past seat override requests.
 
-Given the following information, create a seat arrangement that is as fair as possible, considering the past override requests of each employee.
+Given the following information, create a seat arrangement that is as fair as possible, considering the past override requests of each employee as a strong indicator of their preferences.
 
 Employees: {{employees}}
 Seats: {{seats}}
-Past Override Requests: {{pastOverrideRequests}}
-Fairness Metric: {{fairnessMetric}}
+Past Approved Override Requests (as preferences): {{json pastOverrideRequests}}
+Fairness Metric: "{{fairnessMetric}}"
 
 Output a JSON object where the keys are employee names and the values are the assigned seat names.
 
@@ -75,3 +76,5 @@ const suggestSeatArrangementsFlow = ai.defineFlow(
     return output!;
   }
 );
+
+    

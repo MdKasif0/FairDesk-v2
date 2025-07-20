@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview AI flow to alert the user on the status of their seat change request.
@@ -15,7 +16,7 @@ const AlertSeatChangeStatusInputSchema = z.object({
   approvalsNeeded: z.number().describe('The number of approvals needed for the seat change request.'),
   approvalsReceived: z.number().describe('The number of approvals received for the seat change request.'),
   proposedSeat: z.string().describe('The seat the user requested to change to.'),
-  currentSeat: z.string().describe('The user\'s current seat.'),
+  currentSeat: z.string().describe('The user\'s original seat before the swap.'),
 });
 export type AlertSeatChangeStatusInput = z.infer<typeof AlertSeatChangeStatusInputSchema>;
 
@@ -34,13 +35,13 @@ const prompt = ai.definePrompt({
   output: {schema: AlertSeatChangeStatusOutputSchema},
   prompt: `You are an AI assistant that alerts the user on the status of their seat change request.
 
-The user has requested to change from seat {{{currentSeat}}} to seat {{{proposedSeat}}}.
+The user had requested to swap from seat {{{currentSeat}}} to get seat {{{proposedSeat}}}.
 
-The seat change request requires {{{approvalsNeeded}}} approvals and has received {{{approvalsReceived}}} approvals.
+The seat change request required {{{approvalsNeeded}}} approvals and has received {{{approvalsReceived}}} approvals.
 
 Based on this information, determine if the seat change request has been approved or not. The isApproved parameter is {{{isApproved}}}.
 
-Generate a message to display to the user about the status of their seat change request. The message should clearly state whether or not the request was approved.
+Generate a concise, friendly message to display to the user about the status of their seat change request. The message should clearly state whether the request was approved or rejected and what the outcome is.
 `,
 });
 
@@ -55,3 +56,5 @@ const alertSeatChangeStatusFlow = ai.defineFlow(
     return output!;
   }
 );
+
+    

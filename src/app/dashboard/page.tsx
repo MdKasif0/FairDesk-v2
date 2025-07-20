@@ -24,22 +24,19 @@ import {
   addDoc,
   updateDoc,
   getDoc,
+  onSnapshot,
 } from "firebase/firestore";
-import { useLiveQuery } from 'dexie-react-hooks';
-import { idb } from '@/lib/db';
 
 export default function DashboardPage() {
   const router = useRouter();
   const { toast } = useToast();
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-
-  // Data from IndexedDB, kept in sync with Firestore
-  const users = useLiveQuery(() => idb.users.toArray(), []);
-  const seats = useLiveQuery(() => idb.seats.toArray(), []);
-  const assignments = useLiveQuery(() => idb.assignments.toArray(), []);
-  const changeRequests = useLiveQuery(() => idb.changeRequests.toArray(), []);
-
+  const [users, setUsers] = useState<User[]>([]);
+  const [seats, setSeats] = useState<Seat[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [changeRequests, setChangeRequests] = useState<ChangeRequest[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [isSeatChangeDialogOpen, setSeatChangeDialogOpen] = useState(false);
   const [seatChangeDialogData, setSeatChangeDialogData] = useState<{date: Date, assignment: Assignment} | null>(null);
@@ -49,66 +46,50 @@ export default function DashboardPage() {
 
   // Auth and Data Loading Effect
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
         const userDocRef = doc(db, "users", user.uid);
         const userDocSnap = await getDoc(userDocRef);
         if (userDocSnap.exists()) {
-          setCurrentUser(userDocSnap.data() as User);
+          setCurrentUser({ ...userDocSnap.data(), id: userDocSnap.id } as User);
         } else {
-          // This case might happen if the user doc creation failed
-          // or if they exist in auth but not firestore.
-          // For now, we'll log them out.
           console.error("No user document found for authenticated user.");
           auth.signOut();
           router.push("/login");
-          return;
         }
-        
-        // Sync Firestore data to IndexedDB
-        await syncFirestoreToIdb();
-
       } else {
         router.push("/login");
       }
     });
 
-    return () => unsubscribe();
+    return () => unsubscribeAuth();
   }, [router]);
 
-  // Sync data from firestore to IDB
-  const syncFirestoreToIdb = async () => {
-    try {
-        const collections = ['users', 'seats', 'assignments', 'changeRequests'];
-        const [usersSnapshot, seatsSnapshot, assignmentsSnapshot, changeRequestsSnapshot] = await Promise.all([
-            getDocs(collection(db, 'users')),
-            getDocs(collection(db, 'seats')),
-            getDocs(collection(db, 'assignments')),
-            getDocs(collection(db, 'changeRequests'))
-        ]);
+  // Real-time data listeners
+   useEffect(() => {
+    if (!currentUser) return;
+    setLoading(true);
 
-        const batch = idb.transaction('rw', idb.users, idb.seats, idb.assignments, idb.changeRequests, async () => {
-            idb.users.clear();
-            idb.users.bulkAdd(usersSnapshot.docs.map(d => ({...d.data(), id: d.id } as User)));
-            idb.seats.clear();
-            idb.seats.bulkAdd(seatsSnapshot.docs.map(d => ({...d.data(), id: d.id } as Seat)));
-            idb.assignments.clear();
-            idb.assignments.bulkAdd(assignmentsSnapshot.docs.map(d => ({...d.data(), id: d.id } as Assignment)));
-            idb.changeRequests.clear();
-            idb.changeRequests.bulkAdd(changeRequestsSnapshot.docs.map(d => ({...d.data(), id: d.id } as ChangeRequest)));
-        });
+    const unsubscribes = [
+      onSnapshot(collection(db, 'users'), (snapshot) => {
+        setUsers(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User)));
+      }),
+      onSnapshot(collection(db, 'seats'), (snapshot) => {
+        setSeats(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Seat)));
+      }),
+      onSnapshot(collection(db, 'assignments'), (snapshot) => {
+        setAssignments(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Assignment)));
+      }),
+      onSnapshot(collection(db, 'changeRequests'), (snapshot) => {
+        setChangeRequests(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as ChangeRequest)));
+      }),
+    ];
+    
+    // A bit of a delay to prevent flicker on fast connections
+    setTimeout(() => setLoading(false), 500);
 
-        await batch;
-
-    } catch (error) {
-        console.error("Error syncing data:", error);
-        toast({
-            variant: "destructive",
-            title: "Data Sync Failed",
-            description: "Could not sync data with the server.",
-        });
-    }
-  };
+    return () => unsubscribes.forEach(unsub => unsub());
+  }, [currentUser]);
 
 
   const handleSeatChangeRequest = (date: Date, assignment: Assignment) => {
@@ -118,10 +99,22 @@ export default function DashboardPage() {
   
   const handleSeatChangeSubmit = async (requestedSeatId: string) => {
     if (seatChangeDialogData && currentUser) {
+       const userToSwapWith = assignments.find(a => a.date === format(seatChangeDialogData.date, "yyyy-MM-dd") && a.seatId === requestedSeatId)?.userId;
+
+      if (!userToSwapWith) {
+        toast({
+            variant: "destructive",
+            title: "Error",
+            description: "Could not find the user to swap with. The seat might be unassigned.",
+        });
+        return;
+      }
+      
       const newRequestData = {
         date: format(seatChangeDialogData.date, "yyyy-MM-dd"),
         proposingUserId: currentUser.id,
-        currentAssignment: seatChangeDialogData.assignment,
+        userToSwapWithId: userToSwapWith,
+        originalSeatId: seatChangeDialogData.assignment.seatId,
         requestedSeatId: requestedSeatId,
         status: "pending" as const,
         approvals: [],
@@ -129,12 +122,12 @@ export default function DashboardPage() {
       };
       
       try {
-        const docRef = await addDoc(collection(db, "changeRequests"), newRequestData);
-        await idb.changeRequests.add({...newRequestData, id: docRef.id});
+        await addDoc(collection(db, "changeRequests"), newRequestData);
         toast({
           title: "Request Submitted",
           description: "Your seat change request has been submitted for approval.",
         });
+        setSeatChangeDialogOpen(false);
       } catch (error) {
         console.error("Error submitting request:", error);
         toast({
@@ -152,49 +145,70 @@ export default function DashboardPage() {
     const request = changeRequests.find(r => r.id === requestId);
     if (!request) return;
 
+    // Prevent user from voting multiple times
+    if(request.approvals.includes(currentUser.id) || request.rejections.includes(currentUser.id)) {
+        toast({
+            variant: "default",
+            title: "Already Voted",
+            description: "You have already voted on this request.",
+        });
+        return;
+    }
+
     const newApprovals = vote === 'approve' ? [...request.approvals, currentUser.id] : request.approvals;
     const newRejections = vote === 'reject' ? [...request.rejections, currentUser.id] : request.rejections;
 
-    const approvalsNeeded = 2;
+    const allUsers = users || [];
+    const totalVoters = allUsers.length - 2; // Proposer and swappee don't vote
+    const approvalsNeeded = 2; // As per requirement
     const isApproved = newApprovals.length >= approvalsNeeded;
-    const isRejected = newRejections.length >= ((users?.length ?? 0) - 1 - approvalsNeeded);
+    const isRejected = newRejections.length > (totalVoters - approvalsNeeded);
 
     const newStatus = isApproved ? 'approved' : isRejected ? 'rejected' : 'pending';
 
     const requestRef = doc(db, "changeRequests", requestId);
     
     try {
-        await updateDoc(requestRef, {
+        const updatePayload: any = {
             approvals: newApprovals,
             rejections: newRejections,
-            status: newStatus
-        });
-
-        await idb.changeRequests.update(requestId, {
-            approvals: newApprovals,
-            rejections: newRejections,
-            status: newStatus
-        });
+        };
+        
+        if (newStatus !== 'pending') {
+            updatePayload.status = newStatus;
+        }
+        
+        await updateDoc(requestRef, updatePayload);
         
         if (newStatus === 'approved') {
-            const a1 = assignments?.find(a => a.date === request.date && a.userId === request.currentAssignment.userId);
-            const a2 = assignments?.find(a => a.date === request.date && a.seatId === request.requestedSeatId);
+            const batch = writeBatch(db);
 
-            if (a1 && a2) {
-              const batch = writeBatch(db);
-              const a1Ref = doc(db, "assignments", a1.id);
-              const a2Ref = doc(db, "assignments", a2.id);
+            // Find the two assignments to swap
+            const assignment1Query = query(collection(db, "assignments"), 
+                where("date", "==", request.date), 
+                where("userId", "==", request.proposingUserId)
+            );
+            const assignment2Query = query(collection(db, "assignments"), 
+                where("date", "==", request.date), 
+                where("userId", "==", request.userToSwapWithId)
+            );
 
-              batch.update(a1Ref, { seatId: a2.seatId });
-              batch.update(a2Ref, { seatId: a1.seatId });
-              
-              await batch.commit();
+            const [assignment1Snap, assignment2Snap] = await Promise.all([
+                getDocs(assignment1Query),
+                getDocs(assignment2Query)
+            ]);
 
-              // Update IndexedDB
-              await idb.transaction('rw', idb.assignments, async () => {
-                  idb.assignments.update(a1.id, { seatId: a2.seatId });
-                  idb.assignments.update(a2.id, { seatId: a1.seatId });
-              });
+            if (!assignment1Snap.empty && !assignment2Snap.empty) {
+                const assignment1Ref = assignment1Snap.docs[0].ref;
+                const assignment2Ref = assignment2Snap.docs[0].ref;
+
+                // Swap their seat IDs
+                batch.update(assignment1Ref, { seatId: request.requestedSeatId });
+                batch.update(assignment2Ref, { seatId: request.originalSeatId });
+
+                await batch.commit();
+            } else {
+                 throw new Error("Could not find assignments to swap.");
             }
         }
         
@@ -204,12 +218,17 @@ export default function DashboardPage() {
               approvalsNeeded,
               approvalsReceived: newApprovals.length,
               proposedSeat: seats?.find(s => s.id === request.requestedSeatId)?.name || 'Unknown',
-              currentSeat: seats?.find(s => s.id === request.currentAssignment.seatId)?.name || 'Unknown',
+              currentSeat: seats?.find(s => s.id === request.originalSeatId)?.name || 'Unknown',
             });
             
             toast({
               title: `Request ${newStatus}`,
               description: aiAlert.alertMessage,
+            });
+        } else {
+            toast({
+                title: "Vote Cast",
+                description: "Your vote has been recorded.",
             });
         }
 
@@ -228,18 +247,14 @@ export default function DashboardPage() {
 
     try {
       const batch = writeBatch(db);
-
-      // Delete existing assignments for tomorrow
-      const q = query(collection(db, "assignments"), where("date", "==", tomorrow));
-      const querySnapshot = await getDocs(q);
-      querySnapshot.forEach((doc) => {
-        batch.delete(doc.ref);
-      });
+      const newAssignmentsForTomorrow: Omit<Assignment, 'id'>[] = [];
+      const userList = users || [];
+      const seatList = seats || [];
 
       // Add new assignments
-      const newAssignmentsForTomorrow: Omit<Assignment, 'id'>[] = Object.entries(newSchedule).map(([userName, seatName]) => {
-        const user = users?.find(u => u.name === userName);
-        const seat = seats?.find(s => s.name === seatName);
+      Object.entries(newSchedule).forEach(([userName, seatName]) => {
+        const user = userList.find(u => u.name === userName);
+        const seat = seatList.find(s => s.name === seatName);
         if (!user || !seat) throw new Error(`Invalid user ${userName} or seat ${seatName}`);
         
         const newAssignment = {
@@ -247,14 +262,23 @@ export default function DashboardPage() {
           userId: user.id,
           seatId: seat.id,
         };
+        newAssignmentsForTomorrow.push(newAssignment);
+      });
+      
+      // Delete existing assignments for tomorrow before adding new ones
+      const q = query(collection(db, "assignments"), where("date", "==", tomorrow));
+      const querySnapshot = await getDocs(q);
+      querySnapshot.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+
+      // Add new assignments to the batch
+      newAssignmentsForTomorrow.forEach(assignment => {
         const newDocRef = doc(collection(db, "assignments"));
-        batch.set(newDocRef, newAssignment);
-        return newAssignment;
+        batch.set(newDocRef, assignment);
       });
 
       await batch.commit();
-      // Re-sync after a major change
-      await syncFirestoreToIdb();
       
       toast({
         title: "Success",
@@ -272,7 +296,7 @@ export default function DashboardPage() {
   };
 
 
-  if (!currentUser || !users || !seats || !assignments || !changeRequests) {
+  if (loading || !currentUser) {
     return (
       <div className="flex h-screen w-full items-center justify-center">
         <p>Loading user and data...</p>
@@ -305,7 +329,11 @@ export default function DashboardPage() {
             onApprove={(id) => handleApproval(id, 'approve')}
             onReject={(id) => handleApproval(id, 'reject')}
           />
-          <SmartSchedule onScheduleGenerated={handleScheduleGenerated} />
+          <SmartSchedule 
+            users={users}
+            seats={seats}
+            onScheduleGenerated={handleScheduleGenerated} 
+          />
         </div>
       </main>
 
@@ -317,10 +345,13 @@ export default function DashboardPage() {
           assignment={seatChangeDialogData.assignment}
           user={currentUser}
           seats={seats}
-          currentAssignmentsForDay={assignments.filter(a => format(new Date(a.date), 'yyyy-MM-dd') === format(seatChangeDialogData.date, 'yyyy-MM-dd'))}
+          users={users}
+          currentAssignmentsForDay={assignments.filter(a => a.date === format(seatChangeDialogData.date, 'yyyy-MM-dd'))}
           onSubmit={handleSeatChangeSubmit}
         />
       )}
     </div>
   );
 }
+
+    

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from 'react';
@@ -14,31 +15,54 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Bot, Loader2, User, ArrowRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import type { User as UserType, Seat } from '@/lib/types';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { idb } from '@/lib/db';
+
 
 interface SmartScheduleProps {
   onScheduleGenerated: (newAssignments: Record<string, string>) => void;
+  users: UserType[];
+  seats: Seat[];
 }
 
-export default function SmartSchedule({ onScheduleGenerated }: SmartScheduleProps) {
+export default function SmartSchedule({ onScheduleGenerated, users, seats }: SmartScheduleProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [suggestion, setSuggestion] = useState<SuggestSeatArrangementsOutput | null>(null);
   const { toast } = useToast();
 
+  const changeRequests = useLiveQuery(() => idb.changeRequests.toArray(), []);
+
   const handleGenerate = async () => {
     setIsLoading(true);
     setSuggestion(null);
     try {
-      // In a real app, you'd fetch this data from your backend.
-      const employees = ["Alex", "Maria", "David", "Sophia", "Kenji", "Fatima"];
-      const seats = ["A1", "A2", "B1", "B2", "C1", "C2"];
-      const pastOverrideRequests = { "Alex": ["C2"] };
+      
+      const employeeNames = users.map(u => u.name);
+      const seatNames = seats.map(s => s.name);
+      
+      const pastOverrideRequests: Record<string, string[]> = {};
+      if (changeRequests) {
+        for (const req of changeRequests) {
+           if (req.status === 'approved') {
+               const proposer = users.find(u => u.id === req.proposingUserId);
+               const requestedSeat = seats.find(s => s.id === req.requestedSeatId);
+               if (proposer && requestedSeat) {
+                   if (!pastOverrideRequests[proposer.name]) {
+                       pastOverrideRequests[proposer.name] = [];
+                   }
+                   pastOverrideRequests[proposer.name].push(requestedSeat.name);
+               }
+           }
+        }
+      }
 
       const result = await suggestSeatArrangements({
-        employees,
-        seats,
-        pastOverrideRequests,
-        fairnessMetric: "equal time in preferred seats",
+        employees: employeeNames,
+        seats: seatNames,
+        pastOverrideRequests: pastOverrideRequests,
+        fairnessMetric: "equal time in preferred seats, considering past approved requests as preferences",
       });
       setSuggestion(result);
     } catch (error) {
@@ -57,12 +81,16 @@ export default function SmartSchedule({ onScheduleGenerated }: SmartScheduleProp
     if (suggestion) {
       onScheduleGenerated(suggestion);
       setIsOpen(false);
-      toast({
-        title: "Success",
-        description: "New smart schedule has been applied for tomorrow.",
-      });
+      setSuggestion(null);
     }
   };
+
+  const handleOpenChange = (open: boolean) => {
+    setIsOpen(open);
+    if (!open) {
+      setSuggestion(null);
+    }
+  }
 
   return (
     <>
@@ -70,7 +98,7 @@ export default function SmartSchedule({ onScheduleGenerated }: SmartScheduleProp
         <CardHeader>
           <CardTitle>AI Scheduling</CardTitle>
           <CardDescription>
-            Let AI suggest a fair seating arrangement.
+            Let AI suggest a fair seating arrangement for tomorrow.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -81,7 +109,7 @@ export default function SmartSchedule({ onScheduleGenerated }: SmartScheduleProp
         </CardContent>
       </Card>
 
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <Dialog open={isOpen} onOpenChange={handleOpenChange}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Generate Smart Schedule</DialogTitle>
@@ -105,7 +133,7 @@ export default function SmartSchedule({ onScheduleGenerated }: SmartScheduleProp
 
           {suggestion && (
             <div className="my-4 space-y-2">
-                <h3 className="font-semibold text-center">Suggested Arrangement</h3>
+                <h3 className="font-semibold text-center">Suggested Arrangement for Tomorrow</h3>
                 <div className="grid grid-cols-2 gap-2 p-2 rounded-md border">
                 {Object.entries(suggestion).map(([employee, seat]) => (
                     <div key={employee} className="flex items-center justify-center space-x-2 text-sm p-1 bg-secondary rounded">
@@ -120,7 +148,8 @@ export default function SmartSchedule({ onScheduleGenerated }: SmartScheduleProp
           )}
 
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setIsOpen(false)}>Cancel</Button>
+            <Button variant="ghost" onClick={() => handleOpenChange(false)}>Cancel</Button>
+            {suggestion && <Button variant="secondary" onClick={handleGenerate}>Regenerate</Button>}
             <Button onClick={handleApply} disabled={!suggestion || isLoading}>
               Apply Schedule
             </Button>
@@ -130,3 +159,5 @@ export default function SmartSchedule({ onScheduleGenerated }: SmartScheduleProp
     </>
   );
 }
+
+    
