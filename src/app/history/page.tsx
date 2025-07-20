@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { idb } from "@/lib/db";
 import type { User, Seat, Assignment } from "@/lib/types";
@@ -13,7 +13,7 @@ import { format, parseISO } from "date-fns";
 
 export const dynamic = 'force-dynamic';
 
-export default function HistoryPage() {
+function HistoryPageContents() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -118,4 +118,12 @@ export default function HistoryPage() {
             <BottomNav current="history" userId={currentUser.id} />
         </div>
     );
+}
+
+export default function HistoryPage() {
+    return (
+        <Suspense fallback={<div>Loading...</div>}>
+            <HistoryPageContents />
+        </Suspense>
+    )
 }

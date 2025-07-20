@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { idb } from "@/lib/db";
 import type { User } from "@/lib/types";
@@ -10,7 +10,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 export const dynamic = 'force-dynamic';
 
-export default function StatsPage() {
+function StatsPageContents() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -55,4 +55,12 @@ export default function StatsPage() {
             <BottomNav current="stats" userId={currentUser.id} />
         </div>
     );
+}
+
+export default function StatsPage() {
+    return (
+        <Suspense fallback={<div>Loading...</div>}>
+            <StatsPageContents />
+        </Suspense>
+    )
 }
