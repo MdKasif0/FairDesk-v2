@@ -67,7 +67,10 @@ export default function InviteFriends({ user, group }: InviteFriendsProps) {
               <AvatarImage src={user.avatar} />
               <AvatarFallback>{user.name[0]}</AvatarFallback>
             </Avatar>
-            <span>{user.name}</span>
+            <div className="text-left">
+                <p className="font-medium">{user.name}</p>
+                {user.role && <p className="text-xs text-muted-foreground">{user.role}</p>}
+            </div>
           </div>
         )}
         <Button variant="ghost" size="sm" onClick={handleLogout}>
@@ -109,6 +112,7 @@ export default function InviteFriends({ user, group }: InviteFriendsProps) {
                                 <AvatarFallback>{member.name[0]}</AvatarFallback>
                             </Avatar>
                             <span className="text-sm font-medium">{member.name}</span>
+                            {member.role && <span className="text-xs text-muted-foreground">{member.role}</span>}
                         </div>
                     ))}
                 </div>

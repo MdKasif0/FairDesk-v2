@@ -90,15 +90,17 @@ export default function JoinGroupPage() {
         const newMembers = [...groupData.members, currentUser.id];
         const groupRef = groupDoc.ref;
         const updatePayload: any = { members: newMembers };
+        
+        const newRole = `User ${newMembers.length}` as User['role'];
 
         if (newMembers.length === 3) {
             updatePayload.isLocked = true;
         }
         batch.update(groupRef, updatePayload);
         
-        // 2. Update user's groupId
+        // 2. Update user's groupId and assign role
         const userRef = doc(db, "users", currentUser.id);
-        batch.update(userRef, { groupId: groupDoc.id });
+        batch.update(userRef, { groupId: groupDoc.id, role: newRole });
 
         await batch.commit();
 

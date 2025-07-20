@@ -47,7 +47,7 @@ export default function NoGroup({ user }: NoGroupProps) {
        </div>
       <Card className="w-full max-w-lg text-center shadow-2xl">
         <CardHeader>
-          <CardTitle className="text-3xl font-bold">Welcome to FairDesk!</CardTitle>
+          <CardTitle className="text-3xl font-bold">Welcome, {user?.name}!</CardTitle>
           <CardDescription className="text-lg">
             To get started, you can either create a new group for your team or join an existing one.
           </CardDescription>

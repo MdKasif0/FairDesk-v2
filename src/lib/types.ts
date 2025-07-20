@@ -5,6 +5,7 @@ export interface User {
   email: string;
   avatar: string;
   groupId?: string;
+  role?: 'User 1' | 'User 2' | 'User 3';
 }
 
 export interface Seat {

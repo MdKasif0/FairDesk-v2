@@ -84,9 +84,9 @@ export default function CreateGroupPage() {
         };
         batch.set(newGroupRef, newGroup);
 
-        // 2. Update user's groupId
+        // 2. Update user's groupId and assign role
         const userRef = doc(db, "users", currentUser.id);
-        batch.update(userRef, { groupId: newGroup.id });
+        batch.update(userRef, { groupId: newGroup.id, role: 'User 1' });
         
         // 3. Create default seats for the group
         const defaultSeats = ["Desk 1", "Desk 2", "Desk 3"];

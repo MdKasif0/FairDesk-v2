@@ -92,7 +92,10 @@ export default function Header({ user, groupName, onSmartScheduleClick }: Header
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>{user.name}</DropdownMenuLabel>
+              <DropdownMenuLabel>
+                <p>{user.name}</p>
+                {user.role && <p className="text-xs font-normal text-muted-foreground">{user.role}</p>}
+              </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">
                 <LogOut className="mr-2 h-4 w-4" />
