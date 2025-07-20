@@ -17,11 +17,9 @@ const HARDCODED_SEATS: Omit<Seat, 'id' | 'groupId'>[] = [
 
 const DEFAULT_GROUP_ID = 'default-group';
 
-// Initializes the database with default users, seats, and a group if it's empty.
 export async function initializeData() {
     const userCount = await idb.users.count();
     if (userCount > 0) {
-        // Data already initialized
         return;
     }
 
@@ -57,9 +55,20 @@ export async function initializeData() {
     console.log("Database initialized.");
 }
 
-// Gets the seat assignments for today, creating them if they don't exist.
 export async function getTodaysAssignments(): Promise<Assignment[]> {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
+    
+    // Check if today is a weekend and handle it
+    const today = startOfDay(new Date());
+    if (isSaturday(today) || isSunday(today)) {
+        // On weekends, try to show the last working day's assignments if they exist
+        const lastAssignment = await idb.assignments.orderBy('date').last();
+        if (lastAssignment) {
+            return idb.assignments.where({ date: lastAssignment.date }).toArray();
+        }
+        // If no assignments exist at all, return empty
+        return [];
+    }
     
     let assignments = await idb.assignments.where({ date: todayStr }).toArray();
     
@@ -67,11 +76,9 @@ export async function getTodaysAssignments(): Promise<Assignment[]> {
         return assignments;
     }
 
-    // No assignments for today, so we need to create them based on the last working day.
     const lastAssignment = await idb.assignments.orderBy('date').last();
     
     if (!lastAssignment) {
-        // This is the first time assignments are being created.
         return createInitialAssignments(todayStr);
     }
     
@@ -79,7 +86,6 @@ export async function getTodaysAssignments(): Promise<Assignment[]> {
 }
 
 
-// Creates the very first set of assignments.
 async function createInitialAssignments(dateStr: string): Promise<Assignment[]> {
     const group = await idb.groups.get(DEFAULT_GROUP_ID);
     if (!group) throw new Error("Default group not found");
@@ -90,13 +96,13 @@ async function createInitialAssignments(dateStr: string): Promise<Assignment[]> 
         userId: userId,
         seatId: group.seatIds[index],
         groupId: group.id,
+        isLocked: false,
     }));
 
     await idb.assignments.bulkAdd(newAssignments);
     return newAssignments;
 }
 
-// Creates the next set of assignments based on a previous date.
 async function createNextAssignments(lastDateStr: string, newDateStr: string): Promise<Assignment[]> {
     const group = await idb.groups.get(DEFAULT_GROUP_ID);
     if (!group) throw new Error("Default group not found");
@@ -104,40 +110,86 @@ async function createNextAssignments(lastDateStr: string, newDateStr: string): P
     const lastAssignments = await idb.assignments.where({ date: lastDateStr }).toArray();
     
     const workingDaysPassed = countWorkingDays(parseISO(lastDateStr), parseISO(newDateStr));
-    
-    // Rotate seat IDs based on the last assignment's user order
-    const userIds = lastAssignments.map(a => a.userId);
-    
-    const newAssignments: Assignment[] = userIds.map((userId, index) => {
-         // Find the seat this user had last time
-         const lastUserAssignment = lastAssignments.find(a => a.userId === userId);
-         // Find the index of that seat in the master list
-         const lastSeatIndex = group.seatIds.findIndex(sid => sid === lastUserAssignment?.seatId);
-         
-         if (lastSeatIndex === -1) {
-             // Fallback for safety, though this shouldn't happen in normal operation
-             return {
-                id: `${newDateStr}-${userId}`,
-                date: newDateStr,
-                userId: userId,
-                seatId: group.seatIds[index], 
-                groupId: group.id,
-             }
-         }
-         // Calculate the new seat index
-         const newSeatIndex = (lastSeatIndex + workingDaysPassed) % group.seatIds.length;
 
-        return {
+    // Identify locked users and seats for the new day (though there shouldn't be any yet)
+    const lockedUsers = new Map<string, string>(); // userId -> seatId
+
+    const remainingUserIds = group.memberIds.filter(uid => !lockedUsers.has(uid));
+    const remainingSeatIds = group.seatIds.filter(sid => ![...lockedUsers.values()].includes(sid));
+
+    const newAssignments: Assignment[] = [];
+
+    // Assign locked users first
+    lockedUsers.forEach((seatId, userId) => {
+        newAssignments.push({
             id: `${newDateStr}-${userId}`,
             date: newDateStr,
-            userId: userId,
-            seatId: group.seatIds[newSeatIndex],
+            userId,
+            seatId,
             groupId: group.id,
+            isLocked: true,
+        });
+    });
+
+    // Rotate remaining users
+    const rotatedSeatIds = [...remainingSeatIds];
+    for (let i = 0; i < workingDaysPassed; i++) {
+        rotatedSeatIds.push(rotatedSeatIds.shift()!);
+    }
+
+    const lastUserToSeatMap = new Map(lastAssignments.map(a => [a.userId, a.seatId]));
+
+    remainingUserIds.forEach((userId) => {
+        const lastSeatId = lastUserToSeatMap.get(userId);
+        if (!lastSeatId) {
+             // Fallback for new user added
+             const availableSeat = rotatedSeatIds.shift();
+             if (availableSeat) {
+                 newAssignments.push({
+                     id: `${newDateStr}-${userId}`,
+                     date: newDateStr,
+                     userId: userId,
+                     seatId: availableSeat,
+                     groupId: group.id,
+                     isLocked: false,
+                 });
+             }
+             return;
         }
+
+        const lastSeatIndex = remainingSeatIds.indexOf(lastSeatId);
+        if (lastSeatIndex === -1) {
+             // Fallback for safety (e.g., seat was removed)
+             const availableSeat = rotatedSeatIds.shift();
+             if (availableSeat) {
+                  newAssignments.push({
+                     id: `${newDateStr}-${userId}`,
+                     date: newDateStr,
+                     userId: userId,
+                     seatId: availableSeat,
+                     groupId: group.id,
+                     isLocked: false,
+                  });
+             }
+             return;
+        }
+
+        const newSeatIndex = (lastSeatIndex + workingDaysPassed) % remainingSeatIds.length;
+        const newSeatId = remainingSeatIds[newSeatIndex];
+        
+        newAssignments.push({
+            id: `${newDateStr}-${userId}`,
+            date: newDateStr,
+            userId,
+            seatId: newSeatId,
+            groupId: group.id,
+            isLocked: false,
+        });
     });
 
     await idb.assignments.bulkAdd(newAssignments);
-    return newAssignments;
+    // Re-fetch to ensure order is correct from DB
+    return idb.assignments.where({ date: newDateStr }).toArray();
 }
 
 
@@ -145,21 +197,16 @@ function countWorkingDays(startDate: Date, endDate: Date): number {
     let count = 0;
     let currentDate = startDate;
 
-    // We start from the day *after* the last assignment date
-    currentDate = addDays(currentDate, 1);
-
-    while (currentDate <= endDate) {
+    while (currentDate < endDate) {
+        currentDate = addDays(currentDate, 1);
         const dayOfWeek = currentDate.getDay();
-        if (dayOfWeek !== 0 && dayOfWeek !== 6) { // 0 = Sunday, 6 = Saturday
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) { 
             count++;
         }
-        currentDate = addDays(currentDate, 1);
     }
     return count;
 }
 
-
-// Gets all assignments for a given month, generating them if they don't exist.
 export async function getAssignmentsForMonth(monthDate: Date): Promise<Assignment[]> {
     const monthStart = startOfMonth(monthDate);
     const monthEnd = endOfMonth(monthDate);
@@ -173,7 +220,6 @@ export async function getAssignmentsForMonth(monthDate: Date): Promise<Assignmen
     const missingDates = dateStrings.filter(d => !existingDates.has(d));
 
     if (missingDates.length > 0) {
-        // Find the last known assignment before the start of the month to use as a base
         const lastAssignmentBeforeMonth = await idb.assignments
             .where('date').below(format(monthStart, 'yyyy-MM-dd'))
             .last();
@@ -181,7 +227,6 @@ export async function getAssignmentsForMonth(monthDate: Date): Promise<Assignmen
         let lastKnownDateStr = lastAssignmentBeforeMonth?.date;
         
         if (!lastKnownDateStr) {
-            // No assignments exist at all, create the first one.
             const firstDate = missingDates.find(d => ![0, 6].includes(parseISO(d).getDay()));
             if (firstDate) {
               const initialAssignments = await createInitialAssignments(firstDate);
@@ -192,16 +237,14 @@ export async function getAssignmentsForMonth(monthDate: Date): Promise<Assignmen
         }
 
         if (!lastKnownDateStr) {
-          // Still no last known date, probably an empty month of weekends.
           return assignments;
         }
 
-        // Generate assignments for all missing dates
         for (const dateStr of missingDates) {
             if (existingDates.has(dateStr)) continue;
 
             const dayOfWeek = parseISO(dateStr).getDay();
-            if (dayOfWeek === 0 || dayOfWeek === 6) { // Skip weekends
+            if (dayOfWeek === 0 || dayOfWeek === 6) { 
                 continue;
             }
 
@@ -212,6 +255,56 @@ export async function getAssignmentsForMonth(monthDate: Date): Promise<Assignmen
         }
     }
     
-    // Sort to be safe, though Dexie usually returns them in order.
     return assignments.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export async function randomizeTodaysAssignments(): Promise<Assignment[]> {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const group = await idb.groups.get(DEFAULT_GROUP_ID);
+    if (!group) throw new Error("Default group not found");
+
+    // Get existing assignments for today to respect locks
+    const existingAssignments = await idb.assignments.where({ date: todayStr }).toArray();
+    const lockedAssignments = existingAssignments.filter(a => a.isLocked);
+    const lockedUserIds = new Set(lockedAssignments.map(a => a.userId));
+    const lockedSeatIds = new Set(lockedAssignments.map(a => a.seatId));
+
+    // Get users and seats that are not locked
+    const availableUsers = group.memberIds.filter(uid => !lockedUserIds.has(uid));
+    const availableSeats = group.seatIds.filter(sid => !lockedSeatIds.has(sid));
+
+    // Fisher-Yates shuffle algorithm for available seats
+    for (let i = availableSeats.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [availableSeats[i], availableSeats[j]] = [availableSeats[j], availableSeats[i]];
+    }
+
+    const newAssignments: Assignment[] = [...lockedAssignments];
+    
+    availableUsers.forEach((userId, index) => {
+        newAssignments.push({
+            id: `${todayStr}-${userId}`,
+            date: todayStr,
+            userId,
+            seatId: availableSeats[index],
+            groupId: group.id,
+            isLocked: false,
+        });
+    });
+
+    // Use a transaction to delete old assignments and add new ones
+    await idb.transaction('rw', idb.assignments, async () => {
+        await idb.assignments.where({ date: todayStr }).delete();
+        await idb.assignments.bulkPut(newAssignments);
+    });
+    
+    return idb.assignments.where({ date: todayStr }).toArray();
+}
+
+export async function toggleSeatLock(assignmentId: string): Promise<void> {
+    const assignment = await idb.assignments.get(assignmentId);
+    if (!assignment) {
+        throw new Error("Assignment not found");
+    }
+    await idb.assignments.update(assignmentId, { isLocked: !assignment.isLocked });
 }
