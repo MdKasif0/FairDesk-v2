@@ -25,10 +25,11 @@ function SettingsPageContents() {
     const allUsers = useLiveQuery(() => idb.users.toArray(), []);
     
     useEffect(() => {
-        setIsMounted(true);
+        // This effect runs only on the client, after the component has mounted.
         const storedTheme = localStorage.getItem('theme') || 'light';
         setTheme(storedTheme);
         document.documentElement.classList.toggle('dark', storedTheme === 'dark');
+        setIsMounted(true); // Mark as mounted after the initial client-side setup.
     }, []);
 
     useEffect(() => {
