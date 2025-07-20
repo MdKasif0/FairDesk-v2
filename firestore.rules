@@ -8,52 +8,49 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Helper function to check if a user is a member of a specific group
-    function isGroupMember(groupId) {
-      // Check if user is signed in and if their UID is in the group's members list
-      return isSignedIn() && get(/databases/$(database)/documents/groups/$(groupId)).data.members.hasAny([request.auth.uid]);
+    // Helper function to check if a user is a member of a specific group by looking at their own user document
+    function isMemberOfGroup(groupId) {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.groupId == groupId;
     }
-
-    // Helper function to check if a user is the creator of a group
+    
+    // Helper function to check if user is creator of a group
     function isGroupCreator(groupId) {
         return isSignedIn() && get(/databases/$(database)/documents/groups/$(groupId)).data.creatorId == request.auth.uid;
     }
 
-    // Users can read their own document and create it. They can only update their own document if they are the owner.
+    // Users can read their own document and create it. They can only update their own document. No deletion.
     match /users/{userId} {
       allow read, create: if isSignedIn();
       allow update: if isSignedIn() && request.auth.uid == userId;
-      allow delete: if false; // Users shouldn't delete their own accounts through the app
+      allow delete: if false; 
     }
     
     // Groups can be created by any signed-in user.
     // They can be read by any member of the group.
-    // They can be updated by any member (e.g., to add a new member).
+    // They can be updated by any member (e.g. to add a new member).
     // Deletion is restricted to the creator.
     match /groups/{groupId} {
-      allow create: if isSignedIn();
-      allow read: if isGroupMember(groupId);
-      allow update: if isGroupMember(groupId);
+      allow create: if isSignedIn() && request.resource.data.creatorId == request.auth.uid;
+      allow read: if isMemberOfGroup(groupId);
+      allow update: if isMemberOfGroup(groupId);
       allow delete: if isGroupCreator(groupId);
     }
 
-    // Seats can be read by any group member.
-    // Seats can be created if the user is the creator of the group (for initial setup).
-    // Seats can be written/updated/deleted by any group member.
+    // Seats, Assignments, ChangeRequests can be read/written by group members.
     match /seats/{seatId} {
-      allow read: if isGroupMember(resource.data.groupId);
-      allow create: if isGroupCreator(request.resource.data.groupId);
-      allow write: if isGroupMember(request.resource.data.groupId);
+      allow read: if isMemberOfGroup(request.resource.data.groupId);
+      // Allow seat creation if the user is updating their own profile to join this group in the same request.
+      allow create: if isMemberOfGroup(request.resource.data.groupId) || 
+                       (getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.groupId == request.resource.data.groupId);
+      allow write: if isMemberOfGroup(request.resource.data.groupId);
     }
 
-    // Assignments can be read and written by any member of the group.
     match /assignments/{assignmentId} {
-        allow read, write: if isGroupMember(request.resource.data.groupId);
+        allow read, write: if isMemberOfGroup(request.resource.data.groupId);
     }
     
-    // ChangeRequests can be read and written by any member of the group.
     match /changeRequests/{requestId} {
-        allow read, write: if isGroupMember(request.resource.data.groupId);
+        allow read, write: if isMemberOfGroup(request.resource.data.groupId);
     }
   }
 }
