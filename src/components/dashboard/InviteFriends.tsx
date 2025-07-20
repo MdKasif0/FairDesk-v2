@@ -12,7 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { User, Group } from "@/lib/types";
-import { Copy, Check, LogOut, Users } from "lucide-react";
+import { Copy, Check, LogOut, Users, ArrowRight } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
@@ -118,10 +118,14 @@ export default function InviteFriends({ user, group }: InviteFriendsProps) {
                 </div>
             </div>
         </CardContent>
-         <CardFooter>
+         <CardFooter className="flex flex-col gap-4">
             <p className="text-sm text-muted-foreground mx-auto">
                 Waiting for {membersNeeded} more friend{membersNeeded > 1 ? 's' : ''} to join...
             </p>
+            <Button onClick={() => router.push('/dashboard')}>
+                Continue to Dashboard
+                <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
          </CardFooter>
       </Card>
     </div>
