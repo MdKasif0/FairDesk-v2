@@ -3,55 +3,66 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper function to check if a user is authenticated.
+    // Helper function to check if a user is authenticated
     function isSignedIn() {
       return request.auth != null;
     }
 
-    // Helper function to get the user's document from the users collection.
-    function getUserDoc() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    // Helper function to get the user's document from Firestore
+    function getUserDoc(userId) {
+      return get(/databases/$(database)/documents/users/$(userId));
     }
-
-    // Helper function to check if a user belongs to a specific group.
+    
+    // Helper function to get the incoming (request) user's document
+    function getRequestingUserDoc() {
+        return getUserDoc(request.auth.uid);
+    }
+    
+    // Helper function to check if the requesting user is a member of a specific group
     function isMemberOfGroup(groupId) {
-      return isSignedIn() && getUserDoc().data.groupId == groupId;
+      return isSignedIn() && getRequestingUserDoc().data.groupId == groupId;
     }
+    
+    // Helper function to check if a user can join a group
+    function canJoinGroup(groupResource) {
+        let isAddingSelf = request.resource.data.members.hasAny([request.auth.uid]);
+        let wasNotMember = !groupResource.data.members.hasAny([request.auth.uid]);
+        let groupNotLocked = groupResource.data.isLocked == false;
 
-    // Rule for the 'users' collection.
+        return isAddingSelf && wasNotMember && groupNotLocked;
+    }
+    
+    // Rule for the 'users' collection
     match /users/{userId} {
-      // A user can read or update their own document.
+      // Users can read and update their own document.
       allow read, update: if isSignedIn() && request.auth.uid == userId;
       // Any signed-in user can create their own user document (on signup).
-      allow create: if isSignedIn();
-      // A user can list the members of a group they belong to.
-      allow list: if isSignedIn() && isMemberOfGroup(request.query.where[0].value);
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      // Allow users to list all members of their own group.
+      allow list: if isSignedIn() && isMemberOfGroup(getRequestingUserDoc().data.groupId);
     }
     
-    // Rule for the 'groups' collection.
+    // Rule for the 'groups' collection
     match /groups/{groupId} {
-      // A user can create a group if their UID is the creatorId.
+      // A user can create a group if they are the creator listed in the new document.
       allow create: if isSignedIn() && request.resource.data.creatorId == request.auth.uid;
-      // A user can read or update a group if they are a member of it.
-      allow read, update: if isMemberOfGroup(groupId);
+      // Any member of a group can read it.
+      allow read: if isMemberOfGroup(groupId);
+      // A user can update a group if they are already a member, OR if they are joining the group.
+      allow update: if isMemberOfGroup(groupId) || canJoinGroup(resource);
     }
 
-    // Rule for the 'seats' collection.
+    // Rules for group-specific sub-collections
     match /seats/{seatId} {
-      // A user can read/write a seat document if they are a member of that seat's group.
-      allow read, write: if isMemberOfGroup(request.resource.data.groupId);
+        allow read, write: if isMemberOfGroup(request.resource.data.groupId);
     }
 
-    // Rule for the 'assignments' collection.
     match /assignments/{assignmentId} {
-      // A user can read/write an assignment document if they are a member of that assignment's group.
-      allow read, write: if isMemberOfGroup(request.resource.data.groupId);
+        allow read, write: if isMemberOfGroup(request.resource.data.groupId);
     }
     
-    // Rule for the 'changeRequests' collection.
     match /changeRequests/{requestId} {
-      // A user can read/write a changeRequest document if they are a member of that request's group.
-      allow read, write: if isMemberOfGroup(request.resource.data.groupId);
+        allow read, write: if isMemberOfGroup(request.resource.data.groupId);
     }
   }
 }
