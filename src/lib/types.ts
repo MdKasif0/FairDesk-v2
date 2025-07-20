@@ -1,11 +1,8 @@
 
 export interface User {
   id: string;
-  name: string;
-  email: string;
+  name: 'Aariz' | 'Nabil' | 'Yatharth';
   avatar: string;
-  groupId?: string;
-  role?: 'User 1' | 'User 2' | 'User 3';
 }
 
 export interface Seat {
@@ -39,8 +36,6 @@ export interface ChangeRequest {
 export interface Group {
     id: string;
     name: string;
-    creatorId: string;
     members: string[]; // list of user IDs
-    inviteCode: string;
-    isLocked: boolean;
+    isLocked: boolean; // Should always be true now
 }

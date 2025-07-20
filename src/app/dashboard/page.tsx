@@ -2,20 +2,16 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { format, addDays, isWeekend, startOfToday } from "date-fns";
+import { format, addDays, isWeekend, startOfToday, isBefore } from "date-fns";
 import type { Assignment, ChangeRequest, Seat, User, Group } from "@/lib/types";
 import Header from "@/components/dashboard/Header";
 import CalendarView from "@/components/dashboard/CalendarView";
 import PendingApprovals from "@/components/dashboard/PendingApprovals";
 import SmartSchedule from "@/components/dashboard/SmartSchedule";
 import SeatChangeDialog from "@/components/dashboard/SeatChangeDialog";
-import NoGroup from "@/components/dashboard/NoGroup";
-import InviteFriends from "@/components/dashboard/InviteFriends";
 import { useToast } from "@/hooks/use-toast";
 import { alertSeatChangeStatus } from "@/ai/flows/alert-seat-change-status";
-import { auth, db } from "@/lib/firebase";
-import { onAuthStateChanged } from "firebase/auth";
+import { db } from "@/lib/firebase";
 import {
   collection,
   doc,
@@ -27,13 +23,22 @@ import {
   updateDoc,
   getDoc,
   onSnapshot,
+  setDoc,
 } from "firebase/firestore";
 
+const HARDCODED_USERS: User[] = [
+  { id: 'user-aariz', name: 'Aariz', avatar: 'https://i.pravatar.cc/150?u=aariz' },
+  { id: 'user-nabil', name: 'Nabil', avatar: 'https://i.pravatar.cc/150?u=nabil' },
+  { id: 'user-yatharth', name: 'Yatharth', avatar: 'https://i.pravatar.cc/150?u=yatharth' },
+];
+const HARDCODED_GROUP_ID = 'default-fairdesk-group';
+const HARDCODED_SEATS = ["Desk 1", "Desk 2", "Desk 3"];
+
+
 export default function DashboardPage() {
-  const router = useRouter();
   const { toast } = useToast();
 
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(HARDCODED_USERS[0]);
   const [group, setGroup] = useState<Group | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [seats, setSeats] = useState<Seat[]>([]);
@@ -44,73 +49,97 @@ export default function DashboardPage() {
   const [isSeatChangeDialogOpen, setSeatChangeDialogOpen] = useState(false);
   const [seatChangeDialogData, setSeatChangeDialogData] = useState<{date: Date, assignment: Assignment} | null>(null);
   
-  // For Smart Schedule Dialog
   const [isSmartScheduleDialogOpen, setSmartScheduleDialogOpen] = useState(false);
 
-  // Auth and initial user data loading
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        const userDocRef = doc(db, "users", user.uid);
-        const userDocSnap = await getDoc(userDocRef);
-        if (userDocSnap.exists()) {
-          const userData = { ...userDocSnap.data(), id: userDocSnap.id } as User;
-          setCurrentUser(userData);
-          if (!userData.groupId) {
-            setLoading(false); // No group, so no more data to load
-          }
-        } else {
-          console.error("No user document found for authenticated user.");
-          auth.signOut();
-          router.push("/login");
+    const initializeData = async () => {
+      setLoading(true);
+      const groupDocRef = doc(db, "groups", HARDCODED_GROUP_ID);
+      const groupDocSnap = await getDoc(groupDocRef);
+
+      if (!groupDocSnap.exists()) {
+        console.log("No existing group found, initializing new data...");
+        try {
+          const batch = writeBatch(db);
+          
+          // 1. Create users
+          HARDCODED_USERS.forEach(user => {
+            batch.set(doc(db, "users", user.id), user);
+          });
+          
+          // 2. Create seats
+          const seatIds = HARDCODED_SEATS.map(seatName => {
+              const seatRef = doc(collection(db, "seats"));
+              batch.set(seatRef, {
+                  id: seatRef.id,
+                  name: seatName,
+                  groupId: HARDCODED_GROUP_ID
+              });
+              return seatRef.id;
+          });
+
+          // 3. Create group
+           const newGroup = {
+                id: HARDCODED_GROUP_ID,
+                name: "FairDesk Team",
+                members: HARDCODED_USERS.map(u => u.id),
+                isLocked: true,
+            };
+           batch.set(groupDocRef, newGroup);
+           
+           // 4. Create initial assignment for today
+           let today = startOfToday();
+           if(isWeekend(today)) {
+               today = addDays(today, 1);
+               if(isWeekend(today)) today = addDays(today, 1);
+           }
+           const todayStr = format(today, 'yyyy-MM-dd');
+           HARDCODED_USERS.forEach((user, index) => {
+               const assignmentRef = doc(collection(db, "assignments"));
+               batch.set(assignmentRef, {
+                   id: assignmentRef.id,
+                   date: todayStr,
+                   userId: user.id,
+                   seatId: seatIds[index],
+                   groupId: HARDCODED_GROUP_ID,
+               });
+           });
+           
+          await batch.commit();
+          toast({ title: "Welcome!", description: "Initial data has been set up." });
+        } catch (error) {
+            console.error("Failed to initialize data:", error);
+            toast({ variant: 'destructive', title: 'Initialization Failed', description: 'Could not set up initial user and group data.' });
         }
-      } else {
-        router.push("/login");
       }
-    });
 
-    return () => unsubscribeAuth();
-  }, [router]);
-
-  // Real-time data listeners for group data
-   useEffect(() => {
-    if (!currentUser?.groupId) {
-        if (currentUser) setLoading(false);
-        return;
+      // Setup listeners
+      const unsubscribes = [
+        onSnapshot(doc(db, 'groups', HARDCODED_GROUP_ID), (doc) => {
+          if(doc.exists()){
+              setGroup({ ...doc.data(), id: doc.id } as Group);
+          }
+        }),
+        onSnapshot(query(collection(db, 'users'), where('id', 'in', HARDCODED_USERS.map(u => u.id))), (snapshot) => {
+          setUsers(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User)));
+        }),
+        onSnapshot(query(collection(db, 'seats'), where('groupId', '==', HARDCODED_GROUP_ID)), (snapshot) => {
+          setSeats(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Seat)));
+        }),
+        onSnapshot(query(collection(db, 'assignments'), where('groupId', '==', HARDCODED_GROUP_ID)), (snapshot) => {
+          setAssignments(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Assignment)));
+        }),
+        onSnapshot(query(collection(db, 'changeRequests'), where('groupId', '==', HARDCODED_GROUP_ID), where('status', '==', 'pending')), (snapshot) => {
+          setChangeRequests(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as ChangeRequest)));
+        }),
+      ];
+      
+      setLoading(false);
+      return () => unsubscribes.forEach(unsub => unsub());
     };
-    
-    setLoading(true);
 
-    const groupDocRef = doc(db, 'groups', currentUser.groupId);
-
-    const unsubscribes = [
-      onSnapshot(groupDocRef, (doc) => {
-        if(doc.exists()){
-            setGroup({ ...doc.data(), id: doc.id } as Group);
-        } else {
-            // Handle case where group is deleted or user has invalid groupId
-            setGroup(null);
-        }
-      }),
-      onSnapshot(query(collection(db, 'users'), where('groupId', '==', currentUser.groupId)), (snapshot) => {
-        setUsers(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as User)));
-      }),
-      onSnapshot(query(collection(db, 'seats'), where('groupId', '==', currentUser.groupId)), (snapshot) => {
-        setSeats(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Seat)));
-      }),
-      onSnapshot(query(collection(db, 'assignments'), where('groupId', '==', currentUser.groupId)), (snapshot) => {
-        setAssignments(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Assignment)));
-      }),
-      onSnapshot(query(collection(db, 'changeRequests'), where('groupId', '==', currentUser.groupId), where('status', '==', 'pending')), (snapshot) => {
-        setChangeRequests(snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as ChangeRequest)));
-      }),
-    ];
-    
-    setTimeout(() => setLoading(false), 500);
-
-    return () => unsubscribes.forEach(unsub => unsub());
-  }, [currentUser?.groupId]);
-
+    initializeData();
+  }, []);
 
   const handleSeatChangeRequest = (date: Date, assignment: Assignment) => {
     if (isBefore(date, startOfToday())) return;
@@ -178,11 +207,11 @@ export default function DashboardPage() {
 
     const newApprovals = vote === 'approve' ? [...request.approvals, currentUser.id] : request.approvals;
     const newRejections = vote === 'reject' ? [...request.rejections, currentUser.id] : request.rejections;
-
-    const totalVoters = (group?.members.length || 0) - 2; 
-    const approvalsNeeded = 2;
+    
+    // In a 3-person group, 1 vote is needed (the person not involved).
+    const approvalsNeeded = 1;
     const isApproved = newApprovals.length >= approvalsNeeded;
-    const isRejected = newRejections.length > (totalVoters - approvalsNeeded);
+    const isRejected = newRejections.length >= 1;
 
     const newStatus = isApproved ? 'approved' : isRejected ? 'rejected' : 'pending';
 
@@ -273,8 +302,6 @@ export default function DashboardPage() {
 
     try {
       const batch = writeBatch(db);
-      const userList = users || [];
-      const seatList = seats || [];
       
       const q = query(collection(db, "assignments"), where("date", "==", nextWorkingDay), where("groupId", "==", group.id));
       const querySnapshot = await getDocs(q);
@@ -283,8 +310,8 @@ export default function DashboardPage() {
       });
 
       Object.entries(newSchedule).forEach(([userName, seatName]) => {
-        const user = userList.find(u => u.name === userName);
-        const seat = seatList.find(s => s.name === seatName);
+        const user = users.find(u => u.name === userName);
+        const seat = seats.find(s => s.name === seatName);
         if (!user || !seat) throw new Error(`Invalid user ${userName} or seat ${seatName}`);
         
         const newAssignment = {
@@ -314,6 +341,10 @@ export default function DashboardPage() {
     }
   };
 
+  const handleUserSwitch = (userId: string) => {
+    const user = HARDCODED_USERS.find(u => u.id === userId);
+    if(user) setCurrentUser(user);
+  }
 
   if (loading || !currentUser) {
     return (
@@ -323,20 +354,15 @@ export default function DashboardPage() {
     );
   }
 
-  // User has no group
-  if (!currentUser.groupId) {
-    return <NoGroup user={currentUser} />;
-  }
-
-  // User has a group, but it's not full yet
-  if (group && !group.isLocked) {
-    return <InviteFriends group={group} user={currentUser} />;
-  }
-
-  // User has a full group, show the main dashboard
   return (
     <div className="p-4 md:p-8 space-y-8 bg-background min-h-screen">
-      <Header user={currentUser} groupName={group?.name} onSmartScheduleClick={() => setSmartScheduleDialogOpen(true)} />
+      <Header 
+        user={currentUser} 
+        allUsers={HARDCODED_USERS}
+        onUserSwitch={handleUserSwitch}
+        groupName={group?.name} 
+        onSmartScheduleClick={() => setSmartScheduleDialogOpen(true)} 
+      />
       
       <main className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">

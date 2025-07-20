@@ -33,7 +33,8 @@ export default function PendingApprovals({
   const getSeat = (seatId: string) => seats.find((s) => s.id === seatId);
 
   const pendingRequests = requests.filter(req => req.status === 'pending');
-  const approvalsNeeded = 2; // This should ideally be a config value
+  // For a 3 person group, only 1 approval is needed from the 3rd person.
+  const approvalsNeeded = 1;
 
   return (
     <Card className="shadow-lg">
@@ -46,7 +47,7 @@ export default function PendingApprovals({
                         <HelpCircle className="h-4 w-4 text-muted-foreground cursor-help" />
                     </TooltipTrigger>
                     <TooltipContent>
-                        <p>A swap needs {approvalsNeeded} approvals to pass.</p>
+                        <p>A swap needs {approvalsNeeded} approval to pass.</p>
                         <p>The proposer and the person being swapped with do not vote.</p>
                     </TooltipContent>
                 </Tooltip>

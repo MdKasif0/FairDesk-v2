@@ -15,29 +15,20 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Bot, Users } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { auth } from "@/lib/firebase";
-import { signOut } from "firebase/auth";
+import { Bot, Users, Check } from "lucide-react";
 
 interface HeaderProps {
   user: User | null;
+  allUsers: User[];
+  onUserSwitch: (userId: string) => void;
   groupName?: string;
   onSmartScheduleClick: () => void;
 }
 
-export default function Header({ user, groupName, onSmartScheduleClick }: HeaderProps) {
-  const router = useRouter();
-
-  const handleLogout = async () => {
-    try {
-        await signOut(auth);
-        router.push("/login");
-    } catch (error) {
-        console.error("Logout failed", error);
-    }
-  };
+export default function Header({ user, allUsers, onUserSwitch, groupName, onSmartScheduleClick }: HeaderProps) {
 
   const getInitials = (name: string) => {
     return name
@@ -93,14 +84,20 @@ export default function Header({ user, groupName, onSmartScheduleClick }: Header
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>
-                <p>{user.name}</p>
-                {user.role && <p className="text-xs font-normal text-muted-foreground">{user.role}</p>}
+                <p>Viewing as: {user.name}</p>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">
-                <LogOut className="mr-2 h-4 w-4" />
-                <span>Log out</span>
-              </DropdownMenuItem>
+              <DropdownMenuRadioGroup value={user.id} onValueChange={onUserSwitch}>
+                {allUsers.map(u => (
+                  <DropdownMenuRadioItem key={u.id} value={u.id} className="cursor-pointer">
+                    <Avatar className="h-6 w-6 mr-2">
+                      <AvatarImage src={u.avatar} alt={u.name} />
+                      <AvatarFallback>{getInitials(u.name)}</AvatarFallback>
+                    </Avatar>
+                    <span>{u.name}</span>
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
             </DropdownMenuContent>
           </DropdownMenu>
         )}
