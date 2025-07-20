@@ -2,7 +2,7 @@
 # FairDesk: Smart & Collaborative Seat Management
 
 <div align="center">
-  <img src="/fairdesk-og.png" alt="FairDesk Banner" data-ai-hint="office collaboration"/>
+  <img src="public/fairdesk-og.png" alt="FairDesk Banner" data-ai-hint="office collaboration"/>
 </div>
 
 <p align="center">
