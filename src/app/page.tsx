@@ -1,23 +1,33 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import type { User } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { initializeData } from "@/lib/data-service";
+import { useLiveQuery } from "dexie-react-hooks";
+import { idb } from "@/lib/db";
 
-const HARDCODED_USERS: User[] = [
-  { id: 'user-aariz', name: 'Aariz', avatar: '/aariz.png' },
-  { id: 'user-nabil', name: 'Nabil', avatar: '/nabil.png' },
-  { id: 'user-yatharth', name: 'Yatharth', avatar: '/yatharth.png' },
-];
 
 export default function Home() {
   const router = useRouter();
   const [selectedUserId, setSelectedUserId] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+
+  // Initialize data on component mount
+  useEffect(() => {
+    const init = async () => {
+      await initializeData();
+      setLoading(false);
+    }
+    init();
+  }, []);
+
+  const allUsers = useLiveQuery(() => idb.users.toArray(), []);
 
   const handleContinue = () => {
     if (selectedUserId) {
@@ -31,6 +41,14 @@ export default function Home() {
       .map((n) => n[0])
       .join("");
   };
+
+  if (loading || !allUsers) {
+    return (
+       <div className="flex h-screen w-full flex-col items-center justify-center bg-background">
+         <p>Initializing data...</p>
+       </div>
+    )
+  }
 
   return (
     <div className="flex h-screen w-full flex-col items-center justify-center bg-background">
@@ -65,7 +83,7 @@ export default function Home() {
                     <SelectValue placeholder="Select a user..." />
                 </SelectTrigger>
                 <SelectContent>
-                    {HARDCODED_USERS.map(user => (
+                    {allUsers.map(user => (
                         <SelectItem key={user.id} value={user.id}>
                            <div className="flex items-center gap-2">
                              <Avatar className="h-6 w-6">

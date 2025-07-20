@@ -1,7 +1,7 @@
 
 export interface User {
   id: string;
-  name: 'Aariz' | 'Nabil' | 'Yatharth';
+  name: string;
   avatar: string;
 }
 
@@ -12,7 +12,7 @@ export interface Seat {
 }
 
 export interface Assignment {
-  id: string;
+  id: string; // Combination of date and userId for uniqueness
   date: string; // YYYY-MM-DD
   userId: string;
   seatId: string;
@@ -36,6 +36,6 @@ export interface ChangeRequest {
 export interface Group {
     id: string;
     name: string;
-    members: string[]; // list of user IDs
-    isLocked: boolean; // Should always be true now
+    memberIds: string[]; // list of user IDs
+    seatIds: string[]; // list of seat IDs
 }

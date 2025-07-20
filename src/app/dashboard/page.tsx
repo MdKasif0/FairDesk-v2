@@ -4,31 +4,15 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { format } from "date-fns";
-import type { User, Seat } from "@/lib/types";
+import type { User, Seat, Assignment } from "@/lib/types";
+import { useLiveQuery } from "dexie-react-hooks";
+import { initializeData, getTodaysAssignments } from "@/lib/data-service";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Calendar } from "@/components/ui/calendar";
 import { Menu, User as UserIcon, Bell, Shuffle, Upload, MessageSquare, BarChart, Settings, Home, Calendar as CalendarIcon, History, MoveRight } from "lucide-react";
-
-// Hardcoded data as per previous implementation
-const HARDCODED_USERS: User[] = [
-  { id: 'user-aariz', name: 'Aariz', avatar: '/aariz.png' },
-  { id: 'user-nabil', name: 'Nabil', avatar: '/nabil.png' },
-  { id: 'user-yatharth', name: 'Yatharth', avatar: '/yatharth.png' },
-];
-
-const HARDCODED_SEATS: Seat[] = [
-    { id: 'seat-1', name: "Desk 1", groupId: 'default-group' },
-    { id: 'seat-2', name: "Desk 2", groupId: 'default-group' },
-    { id: 'seat-3', name: "Desk 3", groupId: 'default-group' },
-];
-
-const todaysAssignments = {
-    'user-aariz': 'Desk 1',
-    'user-nabil': 'Desk 2',
-    'user-yatharth': 'Desk 3',
-};
+import { idb } from "@/lib/db";
 
 // Colors for user cards
 const userCardColors = [
@@ -42,26 +26,51 @@ export default function DashboardPage() {
   const router = useRouter();
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [todaysAssignments, setTodaysAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
+  const allUsers = useLiveQuery(() => idb.users.toArray(), []);
+  const allSeats = useLiveQuery(() => idb.seats.toArray(), []);
+
   useEffect(() => {
-    const userId = searchParams.get('user');
-    if (!userId || !HARDCODED_USERS.some(u => u.id === userId)) {
-        router.replace('/');
-        return;
-    }
-    const user = HARDCODED_USERS.find(u => u.id === userId);
-    if(user) {
-        setCurrentUser(user);
-    }
-    setLoading(false);
+    const initAndFetch = async () => {
+      setLoading(true);
+      await initializeData();
+      const assignments = await getTodaysAssignments();
+      setTodaysAssignments(assignments);
+      
+      const userId = searchParams.get('user');
+      if (!userId) {
+          router.replace('/');
+          return;
+      }
+      
+      const user = await idb.users.get(userId);
+      if(!user) {
+          router.replace('/');
+          return;
+      }
+
+      setCurrentUser(user);
+      setLoading(false);
+    };
+
+    initAndFetch();
   }, [searchParams, router]);
   
   const getInitials = (name: string) => {
     return name.split(" ").map((n) => n[0]).join("");
   };
 
-  if (loading || !currentUser) {
+  const getUserForAssignment = (assignment: Assignment): User | undefined => {
+    return allUsers?.find(u => u.id === assignment.userId);
+  }
+
+  const getSeatForAssignment = (assignment: Assignment): Seat | undefined => {
+      return allSeats?.find(s => s.id === assignment.seatId);
+  }
+
+  if (loading || !currentUser || !allUsers || !allSeats) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-gray-50">
         <p>Loading user and data...</p>
@@ -91,18 +100,24 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex space-x-4 overflow-x-auto pb-2 -mx-4 px-4">
-          {HARDCODED_USERS.map((user, index) => (
-            <Card key={user.id} className={`w-36 flex-shrink-0 text-center shadow-md border-0 ${userCardColors[index]}`}>
-              <CardContent className="p-4 flex flex-col items-center justify-center">
-                <Avatar className="w-16 h-16 mb-2 border-2 border-white shadow-lg">
-                  <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
-                </Avatar>
-                <p className="font-semibold text-gray-800">{user.name}</p>
-                <p className="text-sm text-gray-500">- {todaysAssignments[user.id as keyof typeof todaysAssignments]}</p>
-              </CardContent>
-            </Card>
-          ))}
+          {todaysAssignments.map((assignment, index) => {
+            const user = getUserForAssignment(assignment);
+            const seat = getSeatForAssignment(assignment);
+            if (!user || !seat) return null;
+
+            return (
+              <Card key={user.id} className={`w-36 flex-shrink-0 text-center shadow-md border-0 ${userCardColors[index]}`}>
+                <CardContent className="p-4 flex flex-col items-center justify-center">
+                  <Avatar className="w-16 h-16 mb-2 border-2 border-white shadow-lg">
+                    <AvatarImage src={user.avatar} alt={user.name} />
+                    <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
+                  </Avatar>
+                  <p className="font-semibold text-gray-800">{user.name}</p>
+                  <p className="text-sm text-gray-500">- {seat.name}</p>
+                </CardContent>
+              </Card>
+            )
+          })}
         </div>
 
         <div>
