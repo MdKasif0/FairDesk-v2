@@ -4,9 +4,9 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { format } from "date-fns";
-import type { User, Seat, Assignment } from "@/lib/types";
+import type { User, Seat, Assignment, ChangeRequest } from "@/lib/types";
 import { useLiveQuery } from "dexie-react-hooks";
-import { initializeData, getTodaysAssignments, randomizeTodaysAssignments, toggleSeatLock } from "@/lib/data-service";
+import { initializeData, getTodaysAssignments, randomizeTodaysAssignments, toggleSeatLock, swapSeatsForDay } from "@/lib/data-service";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -14,7 +14,10 @@ import { Calendar } from "@/components/ui/calendar";
 import { Menu, User as UserIcon, Bell, Shuffle, Upload, MessageSquare, History, MoveRight, Lock, LockOpen } from "lucide-react";
 import { idb } from "@/lib/db";
 import BottomNav from "@/components/shared/BottomNav";
+import SeatChangeDialog from "@/components/dashboard/SeatChangeDialog";
 import { toast } from "@/hooks/use-toast";
+import { v4 as uuidv4 } from 'uuid';
+import { alertSeatChangeStatus } from "@/ai/flows/alert-seat-change-status";
 
 const userCardColors = [
     'bg-green-100 dark:bg-green-900/50',
@@ -29,6 +32,7 @@ export default function DashboardPage() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isRandomizing, setIsRandomizing] = useState(false);
+  const [isSeatChangeDialogOpen, setIsSeatChangeDialogOpen] = useState(false);
 
   const todaysAssignments = useLiveQuery(async () => {
       return getTodaysAssignments();
@@ -96,13 +100,70 @@ export default function DashboardPage() {
       }
   }
 
-  if (loading || !currentUser || !allUsers || !allSeats) {
+  const handleSeatChangeRequest = async (requestedSeatId: string) => {
+    if (!currentUser || !todaysAssignments || !allUsers) return;
+
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const proposingUserAssignment = todaysAssignments.find(a => a.userId === currentUser.id);
+    const targetAssignment = todaysAssignments.find(a => a.seatId === requestedSeatId);
+
+    if (!proposingUserAssignment || !targetAssignment) {
+      toast({ variant: "destructive", title: "Error", description: "Could not process your request." });
+      return;
+    }
+    
+    // Simulate approval process
+    const otherUsers = allUsers.filter(u => u.id !== currentUser.id);
+    const approvalsNeeded = 2;
+
+    const changeRequest: ChangeRequest = {
+      id: uuidv4(),
+      date: todayStr,
+      proposingUserId: currentUser.id,
+      userToSwapWithId: targetAssignment.userId,
+      originalSeatId: proposingUserAssignment.seatId,
+      requestedSeatId: requestedSeatId,
+      status: 'pending',
+      approvals: otherUsers.map(u => u.id), // Simulate other users approving
+      rejections: [],
+      groupId: 'default-group'
+    };
+
+    await idb.changeRequests.add(changeRequest);
+
+    const isApproved = changeRequest.approvals.length >= approvalsNeeded;
+    
+    if (isApproved) {
+      await idb.changeRequests.update(changeRequest.id, { status: 'approved' });
+      await swapSeatsForDay(todayStr, proposingUserAssignment.id, targetAssignment.id);
+
+      const currentSeat = allSeats?.find(s => s.id === proposingUserAssignment.seatId);
+      const proposedSeat = allSeats?.find(s => s.id === requestedSeatId);
+
+      const alertResult = await alertSeatChangeStatus({
+          isApproved: true,
+          approvalsNeeded,
+          approvalsReceived: changeRequest.approvals.length,
+          currentSeat: currentSeat?.name || 'N/A',
+          proposedSeat: proposedSeat?.name || 'N/A',
+      });
+      
+      toast({ title: "Swap Approved!", description: alertResult.alertMessage });
+    } else {
+       toast({ title: "Request Submitted", description: "Your request has been sent for approval." });
+    }
+  };
+
+
+  if (loading || !currentUser || !allUsers || !allSeats || !todaysAssignments) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <p>Loading user and data...</p>
       </div>
     );
   }
+  
+  const currentUserAssignment = todaysAssignments.find(a => a.userId === currentUser.id);
 
   return (
     <div className="flex flex-col h-screen bg-gray-50 dark:bg-background font-sans">
@@ -168,7 +229,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-            <Button variant="outline" className="h-14 bg-white dark:bg-gray-900 justify-start text-base"><MoveRight className="mr-2 h-5 w-5 text-green-500" />Request Override</Button>
+            <Button variant="outline" className="h-14 bg-white dark:bg-gray-900 justify-start text-base" onClick={() => setIsSeatChangeDialogOpen(true)}><MoveRight className="mr-2 h-5 w-5 text-green-500" />Request Override</Button>
             <Button variant="outline" className="h-14 bg-white dark:bg-gray-900 justify-start text-base" onClick={handleRandomize} disabled={isRandomizing}>
                 <Shuffle className="mr-2 h-5 w-5 text-blue-500" />
                 {isRandomizing ? 'Shuffling...' : 'Randomize Seats'}
@@ -181,6 +242,18 @@ export default function DashboardPage() {
       </main>
 
       <BottomNav current="home" userId={currentUser.id} />
+
+      <SeatChangeDialog 
+        isOpen={isSeatChangeDialogOpen}
+        onOpenChange={setIsSeatChangeDialogOpen}
+        date={new Date()}
+        assignment={currentUserAssignment ?? null}
+        user={currentUser}
+        seats={allSeats}
+        users={allUsers}
+        currentAssignmentsForDay={todaysAssignments}
+        onSubmit={handleSeatChangeRequest}
+      />
     </div>
   );
 }

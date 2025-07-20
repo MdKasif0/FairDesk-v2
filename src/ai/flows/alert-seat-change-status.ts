@@ -4,7 +4,7 @@
  * @fileOverview AI flow to alert the user on the status of their seat change request.
  *
  * - alertSeatChangeStatus - A function that handles the alert process.
- * - AlertSeatChangeStatusInput - The input type for the alertSeatChangeStatus function.
+ * - AlertSeatChangeStatusInput - The input type for the alertSeatChange-Status function.
  * - AlertSeatChangeStatusOutput - The return type for the alertSeatChangeStatus function.
  */
 
@@ -56,5 +56,3 @@ const alertSeatChangeStatusFlow = ai.defineFlow(
     return output!;
   }
 );
-
-    

@@ -131,19 +131,13 @@ async function createNextAssignments(lastDateStr: string, newDateStr: string): P
         });
     });
 
-    // Rotate remaining users
-    const rotatedSeatIds = [...remainingSeatIds];
-    for (let i = 0; i < workingDaysPassed; i++) {
-        rotatedSeatIds.push(rotatedSeatIds.shift()!);
-    }
-
     const lastUserToSeatMap = new Map(lastAssignments.map(a => [a.userId, a.seatId]));
 
     remainingUserIds.forEach((userId) => {
         const lastSeatId = lastUserToSeatMap.get(userId);
         if (!lastSeatId) {
              // Fallback for new user added
-             const availableSeat = rotatedSeatIds.shift();
+             const availableSeat = remainingSeatIds.shift();
              if (availableSeat) {
                  newAssignments.push({
                      id: `${newDateStr}-${userId}`,
@@ -160,7 +154,7 @@ async function createNextAssignments(lastDateStr: string, newDateStr: string): P
         const lastSeatIndex = remainingSeatIds.indexOf(lastSeatId);
         if (lastSeatIndex === -1) {
              // Fallback for safety (e.g., seat was removed)
-             const availableSeat = rotatedSeatIds.shift();
+             const availableSeat = remainingSeatIds.shift();
              if (availableSeat) {
                   newAssignments.push({
                      id: `${newDateStr}-${userId}`,
@@ -307,4 +301,21 @@ export async function toggleSeatLock(assignmentId: string): Promise<void> {
         throw new Error("Assignment not found");
     }
     await idb.assignments.update(assignmentId, { isLocked: !assignment.isLocked });
+}
+
+export async function swapSeatsForDay(date: string, assignment1Id: string, assignment2Id: string) {
+    await idb.transaction('rw', idb.assignments, async () => {
+        const assignment1 = await idb.assignments.get(assignment1Id);
+        const assignment2 = await idb.assignments.get(assignment2Id);
+
+        if (!assignment1 || !assignment2) {
+            throw new Error("One or both assignments not found for swap.");
+        }
+
+        const seat1Id = assignment1.seatId;
+        const seat2Id = assignment2.seatId;
+
+        await idb.assignments.update(assignment1Id, { seatId: seat2Id });
+        await idb.assignments.update(assignment2Id, { seatId: seat1Id });
+    });
 }

@@ -73,6 +73,11 @@ export default function SeatChangeDialog({
     onOpenChange(open);
   }
 
+  const getInitials = (name: string | undefined) => {
+    if (!name) return "";
+    return name.split(" ").map((n) => n[0]).join("");
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent>
@@ -87,7 +92,7 @@ export default function SeatChangeDialog({
                 <div className="flex flex-col items-center gap-1">
                     <Avatar>
                         <AvatarImage src={user.avatar} />
-                        <AvatarFallback>{user.name[0]}</AvatarFallback>
+                        <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
                     </Avatar>
                     <Label>Your Current Seat</Label>
                     <p className="font-semibold text-lg">{currentSeat?.name}</p>
@@ -98,7 +103,7 @@ export default function SeatChangeDialog({
                         {userToSwapWith ? (
                             <>
                                 <AvatarImage src={userToSwapWith.avatar} />
-                                <AvatarFallback>{userToSwapWith.name[0]}</AvatarFallback>
+                                <AvatarFallback>{getInitials(userToSwapWith.name)}</AvatarFallback>
                             </>
                         ) : (
                              <AvatarFallback>?</AvatarFallback>
@@ -139,5 +144,3 @@ export default function SeatChangeDialog({
     </Dialog>
   );
 }
-
-    
