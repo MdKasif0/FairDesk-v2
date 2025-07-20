@@ -106,7 +106,6 @@ async function createNextAssignments(lastDateStr: string, newDateStr: string): P
     
     // Rotate seat IDs based on the last assignment's user order
     const userIds = lastAssignments.map(a => a.userId);
-    const lastSeatIds = lastAssignments.map(a => a.seatId);
     
     const newAssignments: Assignment[] = userIds.map((userId, index) => {
          // Find the seat this user had last time
