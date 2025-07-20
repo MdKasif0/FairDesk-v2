@@ -1,7 +1,7 @@
 
 import { idb } from './db';
 import type { User, Seat, Assignment, Group } from './types';
-import { format, addDays, isSaturday, isSunday, differenceInDays, parseISO, startOfDay, eachDayOfInterval, endOfMonth, startOfMonth } from 'date-fns';
+import { format, addDays, isSaturday, isSunday, parseISO, startOfDay, eachDayOfInterval, endOfMonth, startOfMonth } from 'date-fns';
 
 const HARDCODED_USERS: Omit<User, 'id'>[] = [
   { name: 'Aariz', avatar: 'https://placehold.co/200x200.png', "data-ai-hint": "man smiling" },
@@ -182,11 +182,18 @@ export async function getAssignmentsForMonth(monthDate: Date): Promise<Assignmen
         
         if (!lastKnownDateStr) {
             // No assignments exist at all, create the first one.
-            const firstDate = missingDates[0];
-            const initialAssignments = await createInitialAssignments(firstDate);
-            assignments.push(...initialAssignments);
-            existingDates.add(firstDate);
-            lastKnownDateStr = firstDate;
+            const firstDate = missingDates.find(d => ![0, 6].includes(parseISO(d).getDay()));
+            if (firstDate) {
+              const initialAssignments = await createInitialAssignments(firstDate);
+              assignments.push(...initialAssignments);
+              existingDates.add(firstDate);
+              lastKnownDateStr = firstDate;
+            }
+        }
+
+        if (!lastKnownDateStr) {
+          // Still no last known date, probably an empty month of weekends.
+          return assignments;
         }
 
         // Generate assignments for all missing dates

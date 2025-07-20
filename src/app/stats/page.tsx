@@ -28,7 +28,7 @@ export default function StatsPage() {
         });
     }, [searchParams, router]);
     
-    const getInitials = (name: string) => name.split(" ").map((n) => n[0]).join("");
+    const getInitials = (name: string) => name ? name.split(" ").map((n) => n[0]).join("") : "";
 
     if (!currentUser) {
         return (
