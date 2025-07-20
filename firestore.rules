@@ -8,49 +8,50 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Helper function to check if a user is a member of a specific group by looking at their own user document
+    // Helper function to get the user's document
+    function getUserDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    // Helper function to check if a user is a member of a specific group
     function isMemberOfGroup(groupId) {
-      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.groupId == groupId;
-    }
-    
-    // Helper function to check if user is creator of a group
-    function isGroupCreator(groupId) {
-        return isSignedIn() && get(/databases/$(database)/documents/groups/$(groupId)).data.creatorId == request.auth.uid;
+      return isSignedIn() && getUserDoc().data.groupId == groupId;
     }
 
-    // Users can read their own document and create it. They can only update their own document. No deletion.
+    // Rule for the 'users' collection
     match /users/{userId} {
-      allow read, create: if isSignedIn();
-      allow update: if isSignedIn() && request.auth.uid == userId;
-      allow delete: if false; 
+      // Users can read and update their own document.
+      allow read, update: if isSignedIn() && request.auth.uid == userId;
+      // Any signed-in user can create their own user document (on signup).
+      allow create: if isSignedIn();
+      // Allow users to list all members of their own group.
+      allow list: if isSignedIn() && isMemberOfGroup(request.query.filters[0].value);
     }
     
-    // Groups can be created by any signed-in user.
-    // They can be read by any member of the group.
-    // They can be updated by any member (e.g. to add a new member).
-    // Deletion is restricted to the creator.
+    // Rule for the 'groups' collection
     match /groups/{groupId} {
+      // A user can create a group if they are the creator listed in the new document.
       allow create: if isSignedIn() && request.resource.data.creatorId == request.auth.uid;
-      allow read: if isMemberOfGroup(groupId);
-      allow update: if isMemberOfGroup(groupId);
-      allow delete: if isGroupCreator(groupId);
+      // Any member of a group can read or update it.
+      allow read, update: if isMemberOfGroup(groupId);
     }
 
-    // Seats, Assignments, ChangeRequests can be read/written by group members.
-    match /seats/{seatId} {
-      allow read: if isMemberOfGroup(request.resource.data.groupId);
-      // Allow seat creation if the user is updating their own profile to join this group in the same request.
-      allow create: if isMemberOfGroup(request.resource.data.groupId) || 
-                       (getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.groupId == request.resource.data.groupId);
-      allow write: if isMemberOfGroup(request.resource.data.groupId);
-    }
-
-    match /assignments/{assignmentId} {
-        allow read, write: if isMemberOfGroup(request.resource.data.groupId);
-    }
-    
-    match /changeRequests/{requestId} {
-        allow read, write: if isMemberOfGroup(request.resource.data.groupId);
+    // Rules for group-specific sub-collections
+    // This single rule covers seats, assignments, and changeRequests.
+    match /{collection}/{docId} {
+        // A user can list documents in these collections if they are querying by their own groupId.
+        allow list: if isSignedIn() && (
+          collection == 'seats' || 
+          collection == 'assignments' || 
+          collection == 'changeRequests'
+        ) && isMemberOfGroup(request.query.filters[0].value);
+        
+        // A user can get, create, update, or delete a document if it belongs to their group.
+        allow read, write: if isSignedIn() && (
+          collection == 'seats' || 
+          collection == 'assignments' || 
+          collection == 'changeRequests'
+        ) && isMemberOfGroup(request.resource.data.groupId);
     }
   }
 }
