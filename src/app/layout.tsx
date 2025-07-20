@@ -5,6 +5,7 @@ import { Toaster } from '@/components/ui/toaster';
 export const metadata: Metadata = {
   title: 'FairDesk',
   description: 'Fair and collaborative seat management.',
+  manifest: '/manifest.json',
 };
 
 export default function RootLayout({
