@@ -2,7 +2,6 @@
 import { idb } from './db';
 import type { User, Seat, Assignment, Group } from './types';
 import { format, addDays, isSaturday, isSunday, differenceInDays, parseISO } from 'date-fns';
-import { v4 as uuidv4 } from 'uuid';
 
 const HARDCODED_USERS: Omit<User, 'id'>[] = [
   { name: 'Aariz', avatar: '/aariz.png' },
@@ -102,22 +101,31 @@ async function createNextAssignments(lastDateStr: string, newDateStr: string): P
     if (!group) throw new Error("Default group not found");
 
     const lastAssignments = await idb.assignments.where({ date: lastDateStr }).toArray();
-    const lastSeatIds = lastAssignments.map(a => a.seatId);
-
+    
     const workingDaysPassed = countWorkingDays(parseISO(lastDateStr), parseISO(newDateStr));
     
-    // Rotate seat IDs
-    const rotation = workingDaysPassed % group.seatIds.length;
-    const rotatedSeatIds = [...group.seatIds.slice(rotation), ...group.seatIds.slice(0, rotation)];
-
-    const newAssignments: Assignment[] = group.memberIds.map((userId, index) => {
+    // Rotate seat IDs based on the last assignment's user order
+    const userIds = lastAssignments.map(a => a.userId);
+    const lastSeatIds = lastAssignments.map(a => a.seatId);
+    
+    const newAssignments: Assignment[] = userIds.map((userId, index) => {
          // Find the seat this user had last time
          const lastUserAssignment = lastAssignments.find(a => a.userId === userId);
          // Find the index of that seat in the master list
          const lastSeatIndex = group.seatIds.findIndex(sid => sid === lastUserAssignment?.seatId);
          
+         if (lastSeatIndex === -1) {
+             // Fallback for safety, though this shouldn't happen in normal operation
+             return {
+                id: `${newDateStr}-${userId}`,
+                date: newDateStr,
+                userId: userId,
+                seatId: group.seatIds[index], 
+                groupId: group.id,
+             }
+         }
          // Calculate the new seat index
-         const newSeatIndex = (lastSeatIndex + rotation) % group.seatIds.length;
+         const newSeatIndex = (lastSeatIndex + workingDaysPassed) % group.seatIds.length;
 
         return {
             id: `${newDateStr}-${userId}`,

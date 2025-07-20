@@ -10,12 +10,12 @@ export class FairDeskDB extends Dexie {
 
   constructor() {
     super('fairdeskDB');
-    this.version(2).stores({
-      users: 'id, name',
-      seats: 'id, name, groupId',
-      assignments: 'id, date, userId, seatId, groupId',
-      changeRequests: 'id, date, proposingUserId, status, groupId',
-      groups: 'id, name',
+    this.version(1).stores({
+      users: 'id',
+      seats: 'id, groupId',
+      assignments: 'id, date',
+      changeRequests: 'id, date',
+      groups: 'id',
     });
   }
 }
