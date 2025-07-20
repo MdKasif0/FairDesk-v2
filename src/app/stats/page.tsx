@@ -34,23 +34,23 @@ export default function StatsPage() {
 
     if (!currentUser) {
         return (
-            <div className="flex h-screen w-full items-center justify-center bg-gray-50">
+            <div className="flex h-screen w-full items-center justify-center bg-gray-50 dark:bg-gray-900">
                 <p>Loading...</p>
             </div>
         );
     }
 
     return (
-        <div className="flex flex-col h-screen bg-gray-50 font-sans">
-            <header className="flex items-center justify-between p-4 bg-white shadow-sm">
-                 <h1 className="text-xl font-bold text-gray-800">Stats</h1>
+        <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-950 font-sans">
+            <header className="flex items-center justify-between p-4 bg-white dark:bg-gray-900 shadow-sm">
+                 <h1 className="text-xl font-bold text-gray-800 dark:text-gray-200">Stats</h1>
                 <Avatar>
                     <AvatarImage src={currentUser.avatar} alt={currentUser.name} />
                     <AvatarFallback>{getInitials(currentUser.name)}</AvatarFallback>
                 </Avatar>
             </header>
             <main className="flex-1 flex items-center justify-center text-center p-4">
-                <p className="text-gray-500">Stats page is under construction.</p>
+                <p className="text-gray-500 dark:text-gray-400">Stats page is under construction.</p>
             </main>
             <BottomNav current="stats" userId={currentUser.id} />
         </div>
