@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,8 +29,8 @@ export default function JoinGroupPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
-  useState(() => {
-    onAuthStateChanged(auth, async (user) => {
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
         if (user) {
             const userDoc = await getDoc(doc(db, "users", user.uid));
             if (userDoc.exists()) {
@@ -42,7 +42,8 @@ export default function JoinGroupPage() {
             router.push("/login");
         }
     });
-  });
+    return () => unsubscribe();
+  }, [router]);
 
   const handleJoinGroup = async (e: React.FormEvent) => {
     e.preventDefault();
