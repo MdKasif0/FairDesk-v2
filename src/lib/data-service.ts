@@ -4,9 +4,9 @@ import type { User, Seat, Assignment, Group } from './types';
 import { format, addDays, isSaturday, isSunday, differenceInDays, parseISO } from 'date-fns';
 
 const HARDCODED_USERS: Omit<User, 'id'>[] = [
-  { name: 'Aariz', avatar: '/aariz.png' },
-  { name: 'Nabil', avatar: '/nabil.png' },
-  { name: 'Yatharth', avatar: '/yatharth.png' },
+  { name: 'Aariz', avatar: 'https://placehold.co/200x200.png', "data-ai-hint": "man smiling" },
+  { name: 'Nabil', avatar: 'https://placehold.co/200x200.png', "data-ai-hint": "man portrait" },
+  { name: 'Yatharth', avatar: 'https://placehold.co/200x200.png', "data-ai-hint": "man glasses" },
 ];
 
 const HARDCODED_SEATS: Omit<Seat, 'id' | 'groupId'>[] = [

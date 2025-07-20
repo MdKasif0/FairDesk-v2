@@ -3,6 +3,7 @@ export interface User {
   id: string;
   name: string;
   avatar: string;
+  "data-ai-hint"?: string;
 }
 
 export interface Seat {

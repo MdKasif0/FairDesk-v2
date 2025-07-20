@@ -109,7 +109,7 @@ export default function DashboardPage() {
               <Card key={user.id} className={`w-36 flex-shrink-0 text-center shadow-md border-0 ${userCardColors[index]}`}>
                 <CardContent className="p-4 flex flex-col items-center justify-center">
                   <Avatar className="w-16 h-16 mb-2 border-2 border-white shadow-lg">
-                    <AvatarImage src={user.avatar} alt={user.name} />
+                    <AvatarImage src={user.avatar} alt={user.name} data-ai-hint={user['data-ai-hint']}/>
                     <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
                   </Avatar>
                   <p className="font-semibold text-gray-800">{user.name}</p>
