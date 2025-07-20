@@ -53,12 +53,13 @@ export default function SignupPage() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // Add user to Firestore
+      // Add user to Firestore, without a groupId initially
       await setDoc(doc(db, "users", user.uid), {
         id: user.uid,
         name: name,
         email: email,
-        avatar: `https://i.pravatar.cc/150?u=${user.uid}`
+        avatar: `https://i.pravatar.cc/150?u=${user.uid}`,
+        groupId: null,
       });
 
       toast({
@@ -66,7 +67,9 @@ export default function SignupPage() {
         description: "You have been successfully signed up.",
       });
 
+      // Redirect to dashboard, which will handle the group flow
       router.push("/dashboard");
+
     } catch (error: any) {
       toast({
         variant: "destructive",

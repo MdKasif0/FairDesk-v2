@@ -15,7 +15,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Bot, Loader2, User, ArrowRight, Lock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import type { User as UserType, Seat, Assignment } from '@/lib/types';
+import type { User as UserType, Seat, Assignment, Group } from '@/lib/types';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { getDocs, collection, query, where } from 'firebase/firestore';
@@ -27,9 +27,10 @@ interface SmartScheduleProps {
   users: UserType[];
   seats: Seat[];
   assignments: Assignment[];
+  group: Group | null;
 }
 
-export default function SmartSchedule({ onScheduleGenerated, users, seats, assignments }: SmartScheduleProps) {
+export default function SmartSchedule({ onScheduleGenerated, users, seats, assignments, group }: SmartScheduleProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [suggestion, setSuggestion] = useState<SuggestSeatArrangementsOutput | null>(null);
@@ -49,13 +50,14 @@ export default function SmartSchedule({ onScheduleGenerated, users, seats, assig
   };
 
   const handleGenerate = async () => {
+    if (!group) return;
     setIsLoading(true);
     setSuggestion(null);
     try {
       const employeeNames = users.map(u => u.name);
       const seatNames = seats.map(s => s.name);
       
-      const approvedRequestsSnapshot = await getDocs(query(collection(db, "changeRequests"), where("status", "==", "approved")));
+      const approvedRequestsSnapshot = await getDocs(query(collection(db, "changeRequests"), where("status", "==", "approved"), where("groupId", "==", group.id)));
       const approvedRequests = approvedRequestsSnapshot.docs.map(doc => doc.data());
 
       const pastOverrideRequests: Record<string, string[]> = {};
@@ -128,7 +130,7 @@ export default function SmartSchedule({ onScheduleGenerated, users, seats, assig
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Button className="w-full" onClick={() => setIsOpen(true)}>
+          <Button className="w-full" onClick={() => setIsOpen(true)} disabled={!group?.isLocked}>
             <Bot className="mr-2 h-4 w-4" />
             Generate Smart Schedule
           </Button>

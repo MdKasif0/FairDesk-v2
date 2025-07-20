@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import type { ChangeRequest, Seat, User as UserType } from "@/lib/types";
-import { ThumbsDown, ThumbsUp, ArrowRight, User, HelpCircle } from "lucide-react";
+import type { ChangeRequest, Seat, User as UserType, Group } from "@/lib/types";
+import { ThumbsDown, ThumbsUp, ArrowRight, HelpCircle } from "lucide-react";
 import { format } from 'date-fns';
 
 interface PendingApprovalsProps {
@@ -15,6 +15,7 @@ interface PendingApprovalsProps {
   users: UserType[];
   seats: Seat[];
   currentUser: UserType | null;
+  group: Group | null;
   onApprove: (requestId: string) => void;
   onReject: (requestId: string) => void;
 }
@@ -24,6 +25,7 @@ export default function PendingApprovals({
   users,
   seats,
   currentUser,
+  group,
   onApprove,
   onReject,
 }: PendingApprovalsProps) {
@@ -51,7 +53,7 @@ export default function PendingApprovals({
             </TooltipProvider>
         </div>
         <CardDescription>
-          Seat change requests that need your attention.
+          Seat change requests that need your team's attention.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -151,5 +153,3 @@ export default function PendingApprovals({
     </Card>
   );
 }
-
-    
