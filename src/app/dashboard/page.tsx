@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { format } from "date-fns";
 import type { User, Seat, Assignment, ChangeRequest } from "@/lib/types";
@@ -25,7 +25,7 @@ const userCardColors = [
     'bg-purple-100 dark:bg-purple-900/50'
 ];
 
-export default function DashboardPage() {
+function DashboardPageContents() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -256,4 +256,12 @@ export default function DashboardPage() {
       />
     </div>
   );
+}
+
+export default function DashboardPage() {
+    return (
+        <Suspense fallback={<div>Loading...</div>}>
+            <DashboardPageContents />
+        </Suspense>
+    )
 }

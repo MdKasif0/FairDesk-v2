@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { idb } from "@/lib/db";
 import type { User } from "@/lib/types";
@@ -15,7 +15,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 
 export const dynamic = "force-dynamic";
 
-export default function SettingsPage() {
+function SettingsPageContents() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -152,4 +152,12 @@ export default function SettingsPage() {
             <BottomNav current="settings" userId={currentUser.id} />
         </div>
     );
+}
+
+export default function SettingsPage() {
+    return (
+        <Suspense fallback={<div>Loading...</div>}>
+            <SettingsPageContents />
+        </Suspense>
+    )
 }
